@@ -1,94 +1,94 @@
-<mxfile host="Electron" modified="2024-06-13T15:01:54.782Z" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/21.6.8 Chrome/114.0.5735.289 Electron/25.5.0 Safari/537.36" etag="u19xKbNlyll1jkh3eE73" version="21.6.8" type="device">
+<mxfile host="Electron" modified="2024-06-13T15:11:29.501Z" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/21.6.8 Chrome/114.0.5735.289 Electron/25.5.0 Safari/537.36" etag="aB9B1t8o7QECawvtlV0y" version="21.6.8" type="device">
   <diagram id="C5RBs43oDa-KdzZeNtuy" name="Page-1">
     <mxGraphModel dx="1206" dy="702" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
       <root>
         <mxCell id="WIyWlLk6GJQsqaUBKTNV-0" />
         <mxCell id="WIyWlLk6GJQsqaUBKTNV-1" parent="WIyWlLk6GJQsqaUBKTNV-0" />
-        <mxCell id="V-iIh88g7Wus99Q0zdmn-0" value="Atmoshperic Model" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;" vertex="1" parent="WIyWlLk6GJQsqaUBKTNV-1">
+        <mxCell id="V-iIh88g7Wus99Q0zdmn-0" value="Atmoshperic Model" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;" parent="WIyWlLk6GJQsqaUBKTNV-1" vertex="1">
           <mxGeometry x="380" y="270" width="140" height="170" as="geometry" />
         </mxCell>
-        <mxCell id="V-iIh88g7Wus99Q0zdmn-1" value="Stores and is an easily accessible database of atmoshperic conditions according to various standard models. Allows for interpretation for an altitude and contains any and all static properties" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=4;spacingRight=4;overflow=hidden;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;rotatable=0;whiteSpace=wrap;html=1;" vertex="1" parent="V-iIh88g7Wus99Q0zdmn-0">
+        <mxCell id="V-iIh88g7Wus99Q0zdmn-1" value="Stores and is an easily accessible database of atmoshperic conditions according to various standard models. Allows for interpretation for an altitude and contains any and all static properties" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=4;spacingRight=4;overflow=hidden;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;rotatable=0;whiteSpace=wrap;html=1;" parent="V-iIh88g7Wus99Q0zdmn-0" vertex="1">
           <mxGeometry y="30" width="140" height="140" as="geometry" />
         </mxCell>
-        <mxCell id="V-iIh88g7Wus99Q0zdmn-4" value="Engine Sytstem" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;" vertex="1" parent="WIyWlLk6GJQsqaUBKTNV-1">
+        <mxCell id="V-iIh88g7Wus99Q0zdmn-4" value="Engine Sytstem" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;" parent="WIyWlLk6GJQsqaUBKTNV-1" vertex="1">
           <mxGeometry x="190" y="440" width="140" height="190" as="geometry" />
         </mxCell>
-        <mxCell id="V-iIh88g7Wus99Q0zdmn-5" value="Can perform general engine analysis and assist in a more detailed design process for a jet engine.&amp;nbsp; Allows for easy parameter adjustment, testing, and saving results. Results will be saved in the Engine Database&amp;nbsp;" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=4;spacingRight=4;overflow=hidden;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;rotatable=0;whiteSpace=wrap;html=1;" vertex="1" parent="V-iIh88g7Wus99Q0zdmn-4">
+        <mxCell id="V-iIh88g7Wus99Q0zdmn-5" value="Can perform general engine analysis and assist in a more detailed design process for a jet engine.&amp;nbsp; Allows for easy parameter adjustment, testing, and saving results. Results will be saved in the Engine Database&amp;nbsp;" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=4;spacingRight=4;overflow=hidden;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;rotatable=0;whiteSpace=wrap;html=1;" parent="V-iIh88g7Wus99Q0zdmn-4" vertex="1">
           <mxGeometry y="30" width="140" height="160" as="geometry" />
         </mxCell>
-        <mxCell id="V-iIh88g7Wus99Q0zdmn-6" value="Plane System" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;" vertex="1" parent="WIyWlLk6GJQsqaUBKTNV-1">
+        <mxCell id="V-iIh88g7Wus99Q0zdmn-6" value="Plane System" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;" parent="WIyWlLk6GJQsqaUBKTNV-1" vertex="1">
           <mxGeometry x="570" y="430" width="140" height="230" as="geometry" />
         </mxCell>
-        <mxCell id="V-iIh88g7Wus99Q0zdmn-7" value="Utilize aero performance functions and such to create a very basic plane model with drag and lift estimations while generating flight envelopes and other metrics based on the plane and engine params. Can connect to engines database for testing" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=4;spacingRight=4;overflow=hidden;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;rotatable=0;whiteSpace=wrap;html=1;" vertex="1" parent="V-iIh88g7Wus99Q0zdmn-6">
+        <mxCell id="V-iIh88g7Wus99Q0zdmn-7" value="Utilize aero performance functions and such to create a very basic plane model with drag and lift estimations while generating flight envelopes and other metrics based on the plane and engine params. Can connect to engines database for testing" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=4;spacingRight=4;overflow=hidden;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;rotatable=0;whiteSpace=wrap;html=1;" parent="V-iIh88g7Wus99Q0zdmn-6" vertex="1">
           <mxGeometry y="30" width="140" height="200" as="geometry" />
         </mxCell>
-        <mxCell id="V-iIh88g7Wus99Q0zdmn-8" value="Engine Database" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;" vertex="1" parent="WIyWlLk6GJQsqaUBKTNV-1">
+        <mxCell id="V-iIh88g7Wus99Q0zdmn-8" value="Engine Database" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;" parent="WIyWlLk6GJQsqaUBKTNV-1" vertex="1">
           <mxGeometry x="240" y="670" width="140" height="210" as="geometry" />
         </mxCell>
-        <mxCell id="V-iIh88g7Wus99Q0zdmn-9" value="Stores any and all details about engine design and testing, allowing for the iteration upon previous engines by pulling all necessary data and saving changes as new engines for comaprison. Also stores the results if they need to be visualized" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=4;spacingRight=4;overflow=hidden;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;rotatable=0;whiteSpace=wrap;html=1;" vertex="1" parent="V-iIh88g7Wus99Q0zdmn-8">
+        <mxCell id="V-iIh88g7Wus99Q0zdmn-9" value="Stores any and all details about engine design and testing, allowing for the iteration upon previous engines by pulling all necessary data and saving changes as new engines for comaprison. Also stores the results if they need to be visualized" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=4;spacingRight=4;overflow=hidden;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;rotatable=0;whiteSpace=wrap;html=1;" parent="V-iIh88g7Wus99Q0zdmn-8" vertex="1">
           <mxGeometry y="30" width="140" height="180" as="geometry" />
         </mxCell>
-        <mxCell id="V-iIh88g7Wus99Q0zdmn-10" value="Plane Database" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;" vertex="1" parent="WIyWlLk6GJQsqaUBKTNV-1">
+        <mxCell id="V-iIh88g7Wus99Q0zdmn-10" value="Plane Database" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;" parent="WIyWlLk6GJQsqaUBKTNV-1" vertex="1">
           <mxGeometry x="520" y="710" width="140" height="170" as="geometry" />
         </mxCell>
-        <mxCell id="V-iIh88g7Wus99Q0zdmn-11" value="Similar to engine database, stores any and all relevant data connecting to a particular plane from geometry and coefficients to engines and flight performance." style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=4;spacingRight=4;overflow=hidden;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;rotatable=0;whiteSpace=wrap;html=1;" vertex="1" parent="V-iIh88g7Wus99Q0zdmn-10">
+        <mxCell id="V-iIh88g7Wus99Q0zdmn-11" value="Similar to engine database, stores any and all relevant data connecting to a particular plane from geometry and coefficients to engines and flight performance." style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=4;spacingRight=4;overflow=hidden;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;rotatable=0;whiteSpace=wrap;html=1;" parent="V-iIh88g7Wus99Q0zdmn-10" vertex="1">
           <mxGeometry y="30" width="140" height="140" as="geometry" />
         </mxCell>
-        <mxCell id="V-iIh88g7Wus99Q0zdmn-14" value="" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="WIyWlLk6GJQsqaUBKTNV-1" source="V-iIh88g7Wus99Q0zdmn-1" target="V-iIh88g7Wus99Q0zdmn-4">
+        <mxCell id="V-iIh88g7Wus99Q0zdmn-14" value="" style="endArrow=classic;html=1;rounded=0;" parent="WIyWlLk6GJQsqaUBKTNV-1" source="V-iIh88g7Wus99Q0zdmn-1" target="V-iIh88g7Wus99Q0zdmn-4" edge="1">
           <mxGeometry width="50" height="50" relative="1" as="geometry">
             <mxPoint x="340" y="562" as="sourcePoint" />
             <mxPoint x="580" y="568" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="V-iIh88g7Wus99Q0zdmn-15" value="" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="WIyWlLk6GJQsqaUBKTNV-1" source="V-iIh88g7Wus99Q0zdmn-1" target="V-iIh88g7Wus99Q0zdmn-6">
+        <mxCell id="V-iIh88g7Wus99Q0zdmn-15" value="" style="endArrow=classic;html=1;rounded=0;" parent="WIyWlLk6GJQsqaUBKTNV-1" source="V-iIh88g7Wus99Q0zdmn-1" target="V-iIh88g7Wus99Q0zdmn-6" edge="1">
           <mxGeometry width="50" height="50" relative="1" as="geometry">
             <mxPoint x="385" y="400" as="sourcePoint" />
             <mxPoint x="340" y="456" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="V-iIh88g7Wus99Q0zdmn-16" value="" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="WIyWlLk6GJQsqaUBKTNV-1" source="V-iIh88g7Wus99Q0zdmn-5" target="V-iIh88g7Wus99Q0zdmn-8">
+        <mxCell id="V-iIh88g7Wus99Q0zdmn-16" value="" style="endArrow=classic;html=1;rounded=0;" parent="WIyWlLk6GJQsqaUBKTNV-1" source="V-iIh88g7Wus99Q0zdmn-5" target="V-iIh88g7Wus99Q0zdmn-8" edge="1">
           <mxGeometry width="50" height="50" relative="1" as="geometry">
             <mxPoint x="340" y="562" as="sourcePoint" />
             <mxPoint x="580" y="568" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="V-iIh88g7Wus99Q0zdmn-17" value="" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="WIyWlLk6GJQsqaUBKTNV-1" source="V-iIh88g7Wus99Q0zdmn-6" target="V-iIh88g7Wus99Q0zdmn-10">
+        <mxCell id="V-iIh88g7Wus99Q0zdmn-17" value="" style="endArrow=classic;html=1;rounded=0;" parent="WIyWlLk6GJQsqaUBKTNV-1" source="V-iIh88g7Wus99Q0zdmn-6" target="V-iIh88g7Wus99Q0zdmn-10" edge="1">
           <mxGeometry width="50" height="50" relative="1" as="geometry">
             <mxPoint x="340" y="547" as="sourcePoint" />
             <mxPoint x="580" y="553" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="V-iIh88g7Wus99Q0zdmn-18" value="" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="WIyWlLk6GJQsqaUBKTNV-1" source="V-iIh88g7Wus99Q0zdmn-8" target="V-iIh88g7Wus99Q0zdmn-7">
+        <mxCell id="V-iIh88g7Wus99Q0zdmn-18" value="" style="endArrow=classic;html=1;rounded=0;" parent="WIyWlLk6GJQsqaUBKTNV-1" source="V-iIh88g7Wus99Q0zdmn-8" target="V-iIh88g7Wus99Q0zdmn-7" edge="1">
           <mxGeometry width="50" height="50" relative="1" as="geometry">
             <mxPoint x="340" y="547" as="sourcePoint" />
             <mxPoint x="580" y="553" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="V-iIh88g7Wus99Q0zdmn-19" value="" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="WIyWlLk6GJQsqaUBKTNV-1" source="V-iIh88g7Wus99Q0zdmn-8" target="V-iIh88g7Wus99Q0zdmn-10">
+        <mxCell id="V-iIh88g7Wus99Q0zdmn-19" value="" style="endArrow=classic;html=1;rounded=0;" parent="WIyWlLk6GJQsqaUBKTNV-1" source="V-iIh88g7Wus99Q0zdmn-8" target="V-iIh88g7Wus99Q0zdmn-10" edge="1">
           <mxGeometry width="50" height="50" relative="1" as="geometry">
             <mxPoint x="340" y="621" as="sourcePoint" />
             <mxPoint x="480" y="744" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="V-iIh88g7Wus99Q0zdmn-20" value="" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="WIyWlLk6GJQsqaUBKTNV-1" source="V-iIh88g7Wus99Q0zdmn-21" target="V-iIh88g7Wus99Q0zdmn-22">
+        <mxCell id="V-iIh88g7Wus99Q0zdmn-20" value="" style="endArrow=classic;html=1;rounded=0;" parent="WIyWlLk6GJQsqaUBKTNV-1" source="V-iIh88g7Wus99Q0zdmn-21" target="V-iIh88g7Wus99Q0zdmn-22" edge="1">
           <mxGeometry width="50" height="50" relative="1" as="geometry">
-            <mxPoint x="180" y="370" as="sourcePoint" />
-            <mxPoint x="180" y="320" as="targetPoint" />
+            <mxPoint x="275" y="395" as="sourcePoint" />
+            <mxPoint x="275" y="345" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="V-iIh88g7Wus99Q0zdmn-21" value="Data Provider" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="WIyWlLk6GJQsqaUBKTNV-1">
-          <mxGeometry x="80" y="310" width="60" height="40" as="geometry" />
+        <mxCell id="V-iIh88g7Wus99Q0zdmn-21" value="Data Provider" style="rounded=1;whiteSpace=wrap;html=1;" parent="WIyWlLk6GJQsqaUBKTNV-1" vertex="1">
+          <mxGeometry x="175" y="335" width="60" height="40" as="geometry" />
         </mxCell>
-        <mxCell id="V-iIh88g7Wus99Q0zdmn-22" value="Data Receiver" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="WIyWlLk6GJQsqaUBKTNV-1">
-          <mxGeometry x="190" y="310" width="60" height="40" as="geometry" />
+        <mxCell id="V-iIh88g7Wus99Q0zdmn-22" value="Data Receiver" style="rounded=1;whiteSpace=wrap;html=1;" parent="WIyWlLk6GJQsqaUBKTNV-1" vertex="1">
+          <mxGeometry x="285" y="335" width="60" height="40" as="geometry" />
         </mxCell>
-        <mxCell id="V-iIh88g7Wus99Q0zdmn-26" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="WIyWlLk6GJQsqaUBKTNV-1" source="V-iIh88g7Wus99Q0zdmn-25" target="V-iIh88g7Wus99Q0zdmn-7">
+        <mxCell id="V-iIh88g7Wus99Q0zdmn-26" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" parent="WIyWlLk6GJQsqaUBKTNV-1" source="V-iIh88g7Wus99Q0zdmn-25" target="V-iIh88g7Wus99Q0zdmn-7" edge="1">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="V-iIh88g7Wus99Q0zdmn-27" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="WIyWlLk6GJQsqaUBKTNV-1" source="V-iIh88g7Wus99Q0zdmn-25" target="V-iIh88g7Wus99Q0zdmn-5">
+        <mxCell id="V-iIh88g7Wus99Q0zdmn-27" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" parent="WIyWlLk6GJQsqaUBKTNV-1" source="V-iIh88g7Wus99Q0zdmn-25" target="V-iIh88g7Wus99Q0zdmn-5" edge="1">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="V-iIh88g7Wus99Q0zdmn-25" value="Analysis Tools" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="WIyWlLk6GJQsqaUBKTNV-1">
+        <mxCell id="V-iIh88g7Wus99Q0zdmn-25" value="Analysis Tools" style="rounded=1;whiteSpace=wrap;html=1;" parent="WIyWlLk6GJQsqaUBKTNV-1" vertex="1">
           <mxGeometry x="400" y="540" width="90" height="25" as="geometry" />
         </mxCell>
       </root>
