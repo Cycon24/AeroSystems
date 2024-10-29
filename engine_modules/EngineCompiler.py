@@ -4,12 +4,26 @@ Created on Sun Jun 30 07:37:41 2024
 
 @author: cycon
 
+To-Do List:
+    - Define the EngineCreator init fnct
+        - Determine how to handle the parameters.
+            - There should be two types of params, overall/intra params (engine/between component params)
+            and specific/inter params (within a component).
+            - Overall params are set within EngineCreator module
+        - 
+    - Restructure calculate to handle n number of airstreams and m number components
+    - Create some sort of packet of data that can be transfered to the database/returned
+        - Look at Mareks code regarding these packets
+        
+        
 20240630:
     Created from previously named file EngineModule.py, which is renamed to SimpleStages.py
+20240714:
     
 """
 
 import EnginePerformanceFunctions as EPF
+import SimpleStages as SS
 
 
 # =============================================================================
@@ -19,6 +33,39 @@ import EnginePerformanceFunctions as EPF
 class EngineCreator():
     def __init__(self, **kwargs):
         print('bla bla')
+        
+    
+    def calculate(self, printVals=True):
+        '''
+        Calculates the properties of the air throughout the engine.
+
+        Parameters
+        ----------
+        printVals : Bool, optional
+            When true, it will print out each components exit conditions. The default is True.
+
+        Returns
+        -------
+        None.
+
+        '''
+        for i in range(0,len(self.AllStages)):
+            # Calculate each row and print outputs
+            self.AllStages[i][0].calculate()
+            if printVals: self.AllStages[i][0].printOutputs()
+            # Check if current stage has a parallel (ie, prev stage passes air to 2 stages)
+            if self.AllStages[i][1] != None:
+                self.AllStages[i][1].calculate()
+                if printVals: self.AllStages[i][1].printOutputs()
+                
+            # Move forward/propogate
+            if i != len(self.AllStages)-1: # It is not at the end, so forward
+                if self.AllStages[i+1][1] != None: 
+                    # Means that this stage delivers to two stages: fan -> HPC & BP Noz
+                    self.AllStages[i][0].forward(self.AllStages[i+1][0],self.AllStages[i+1][1])
+                else:
+                    # Stage delivers to one stage
+                    self.AllStages[i][0].forward(self.AllStages[i+1][0])
 
 # =============================================================================
 # Example Classes
@@ -45,7 +92,7 @@ class Turbofan_SingleSpool():
             
             Optional
             'Vinf': None, # Or Minf
-            'Minf': 0.85, # Or Vinf, if none its assumed stationary
+            'Minf': None, # Or Vinf, if none its assumed stationary
             'mdot_a': # Mass flow rate of air into engine (kg/s)
             'Q_fuel': Heat energy of fuel, pass if real to calculate f and include fuel flow in power/velecity calcs
             'F': Thrust of the engine produced
@@ -109,13 +156,13 @@ class Turbofan_SingleSpool():
         self.F = kwargs.get('F')
         
         # Define each stage and pass in parameters
-        self.inlet = Intake(**gen_kwargs,ni=ni,m_dot=mdot)
-        self.fan = Compressor(**gen_kwargs, rc=rfan, np=npf, ni=nf)
-        self.BP_nozzle = Nozzle('cold',**gen_kwargs, ni=nj)
-        self.HP_comp = Compressor(**gen_kwargs, rc=rc, np=npc, ni=nc)
-        self.combustor = Combustor(**gen_kwargs, Toe=To_ti, dPb_dec=dP_b, ni=nb)
-        self.HP_turb = Turbine([self.fan, self.HP_comp], **gen_kwargs, nm=nm, ni=nt, np=npt)
-        self.nozzle = Nozzle(**gen_kwargs, ni=nj) # Nozzle/Exhaust?
+        self.inlet     = SS.Intake(**gen_kwargs,ni=ni,m_dot=mdot)
+        self.fan       = SS.Compressor(**gen_kwargs, rc=rfan, np=npf, ni=nf)
+        self.BP_nozzle = SS.Nozzle('cold',**gen_kwargs, ni=nj)
+        self.HP_comp   = SS.Compressor(**gen_kwargs, rc=rc, np=npc, ni=nc)
+        self.combustor = SS.Combustor(**gen_kwargs, Toe=To_ti, dPb_dec=dP_b, ni=nb)
+        self.HP_turb   = SS.Turbine([self.fan, self.HP_comp], **gen_kwargs, nm=nm, ni=nt, np=npt)
+        self.nozzle    = SS.Nozzle(**gen_kwargs, ni=nj) # Nozzle/Exhaust?
         
         # Set names for easier readout checks
         self.fan.StageName = 'Fan'
@@ -329,14 +376,14 @@ class Turbofan_DoubleSpool():
         self.F = kwargs.get('F')
         
         # Define each stage and pass in parameters
-        self.inlet = Intake(**gen_kwargs,ni=ni,m_dot=mdot)
-        self.fan = Compressor(**gen_kwargs, rc=rfan, np=npf, ni=nf)
-        self.BP_nozzle = Nozzle('cold',**gen_kwargs, ni=nj)
-        self.HP_comp = Compressor(**gen_kwargs, rc=rc, np=npc, ni=nc)
-        self.combustor = Combustor(**gen_kwargs, Toe=To_ti, dPb_dec=dP_b, ni=nb)
-        self.HP_turb = Turbine(self.HP_comp, **gen_kwargs, nm=nm, ni=nt, np=npt)
-        self.LP_turb = Turbine(self.fan, **gen_kwargs, nm=nm, ni=nt_lp, np=npt_lp)
-        self.nozzle = Nozzle(**gen_kwargs, ni=nj) # Nozzle/Exhaust?
+        self.inlet     = SS.Intake(**gen_kwargs,ni=ni,m_dot=mdot)
+        self.fan       = SS.Compressor(**gen_kwargs, rc=rfan, np=npf, ni=nf)
+        self.BP_nozzle = SS.Nozzle('cold',**gen_kwargs, ni=nj)
+        self.HP_comp   = SS.Compressor(**gen_kwargs, rc=rc, np=npc, ni=nc)
+        self.combustor = SS.Combustor(**gen_kwargs, Toe=To_ti, dPb_dec=dP_b, ni=nb)
+        self.HP_turb   = SS.Turbine(self.HP_comp, **gen_kwargs, nm=nm, ni=nt, np=npt)
+        self.LP_turb   = SS.Turbine(self.fan, **gen_kwargs, nm=nm, ni=nt_lp, np=npt_lp)
+        self.nozzle    = SS.Nozzle(**gen_kwargs, ni=nj) # Nozzle/Exhaust?
         
         # Set names for easier readout checks
         self.fan.StageName = 'Fan'
