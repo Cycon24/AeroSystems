@@ -13,7 +13,7 @@ import numpy as np
 import EngineErrors as EngineErrors
 
 '''
-Coding stuff
+Naming Convention
 X   - Static property X
 Xa  - Static property X at atmospheric conditions
 Xi  - Static property X at the inlet of a stage
@@ -50,7 +50,7 @@ class Stage():
         self.cp_a = 1.005 # kJ/kg*K     cp of air
         self.cp_g = 1.148 # kJ/kg*K     cp of gas (combustion products)
         self.g = 9.81 # m/s^2   # gravitational constant
-        
+        self.gc = 1   # N / (m/s^2) Gravitational Conversion
         
         # General properties that could be used by all stages 
         # so all components know the atm conditions

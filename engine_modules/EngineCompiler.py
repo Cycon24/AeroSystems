@@ -73,7 +73,7 @@ class EngineCreator():
 class Turbofan_SingleSpool():
     def __init__(self, **kwargs):
         '''
-        A signgle spool turbofan which has one turbine to power the
+        A signle spool turbofan which has one turbine to power the
         fan and compressor. It has a cold-air bypass which is after the fan
         and goes straight to a nozzle. The core-flow goes to a second compressor
         and then to the combustor, followed by a single turbine and lastly the
@@ -326,7 +326,7 @@ class Turbofan_DoubleSpool():
             'npt': Turbine Polytropic Efficiency (overrides isentropic)
             'npt_lp': Low Pressure Turbine Polytropic Efficiency (overrides isentropic)
             'dP_combustor': Decimal pressure drop in combustor (ex: 0.05 for 5% P loss, 0 for ideal)
-            
+
         Returns
         -------
         None.
