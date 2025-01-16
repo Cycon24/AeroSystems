@@ -94,7 +94,7 @@ class Stage():
 
         Parameters
         ----------
-        next_Stage : Object
+        next_Stage : Stage Object
             A custom child of the stage object that will receive and then proces the inlet properties.
 
         Returns

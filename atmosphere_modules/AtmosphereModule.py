@@ -180,5 +180,6 @@ def StandardAtmosphereTable_Imperial():
 
 if __name__=="__main__":
     atm = Atmosphere()
-    print(atm.linterp_h(10000, atm.rho))
+    print(0.85*atm.linterp_h(42975, atm.a))
+    print
     # Po / Ps = (1 + gamma - 1)/2 * M^2
