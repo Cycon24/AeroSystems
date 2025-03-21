@@ -34,6 +34,8 @@ class EngineCreator():
     def __init__(self, **kwargs):
         print('bla bla')
         
+        self.MAIN_CALCULATION_UPDATED = False 
+        
     
     def calculate(self, printVals=True):
         '''
@@ -66,7 +68,20 @@ class EngineCreator():
                 else:
                     # Stage delivers to one stage
                     self.AllStages[i][0].forward(self.AllStages[i+1][0])
-
+                    
+        self.MAIN_CALCULATION_UPDATED = True 
+                    
+    def engine_performance(self):
+        
+        # Uninstalled thrust at the moment
+        # Installed thrust will include inlet and outlet losses
+        if not self.MAIN_CALCULATION_UPDATED:
+            self.calculate(False) 
+            
+        # Pull out types of stages, 
+        
+        
+            
 # =============================================================================
 # Example Classes
 # =============================================================================

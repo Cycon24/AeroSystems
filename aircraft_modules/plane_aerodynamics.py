@@ -399,10 +399,10 @@ class Plane():
         Notes
         -----
         - The function assumes the aircraft operates within a single altitude.
-        - The calculations depend heavily on the atmospheric model's accuracy and interpolation methods.
+        - The calculations depend heavily on the atmospheric model established prior to calling.
         - The flight envelope is constrained by maximum Mach number (`self.max_M`) and aerodynamic limits.
         - The method includes default aerodynamic parameters (`self.CL_max`, `self.CD0`, `self.K`) and geometric values (`self.S_ref`) that must be defined in the class.
-
+        - The calculations are performed with a constant weight
         """
 
         # Will only be used for singlular altitudes, not built to handle a range of h's
@@ -929,8 +929,25 @@ class Plane():
         plt.tight_layout()
         
          
+    # def Calculate_Range_Fuel_Burned(self, h=0, W=None, n=1):
+        
+    #     # Check values and establish weight
+    #     self.Check()
+    #     W = self.W if W == None else W
+       
+    #     atm = Atmosphere()
+        
+    #     # Setup to handle a vector of altitudes:
+    #     if type(h) == np.ndarray or type(h) == list:
+    #         altitudes = h
+    #     else:
+    #         altitudes = [h]
+        
+    #     # Calculate for each altitude
+    #     for i, h in enumerate(altitudes):
+    #         h = float(h)
             
-            
+    #         flightChars = self.Calculate_FlightCharacteristics(h, n, W, atm)
         
     #def Calc_V_Stall(self, h=0):
         
