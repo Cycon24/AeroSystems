@@ -8,6 +8,12 @@ Created on Thu Aug 24 09:45:15 2023
     Revised and seperated into different files, renamed to SimpleStages.py
     Moved engine definition portion into EngineCompiler.py
     Moved complex stage solving into ComplexStages.py
+20250307:
+    - To Do: Maybe revsise stages to only house one set of gas properties as to unify equations 
+    (but values of properties will be different in certain stages)
+    - To Do: Intake needs ram effect addition and efficiency
+    - To Do: Maybe reconfigure isentropic efficiency to be None by default to allow for calc of 
+    efficiencies from given temp/pressure values when needed (and force declaration of efficiency)
 """
 import numpy as np
 import EngineErrors as EngineErrors
@@ -44,13 +50,13 @@ class Stage():
 
         '''
         # Constants
-        self.R = 287 # J/kg*K    R value of Air
-        self.gam_a = 1.4        # Gamma value of air
-        self.gam_g = 4/3        # Gamma value of gas (combustion products)
-        self.cp_a = 1.005 # kJ/kg*K     cp of air
-        self.cp_g = 1.148 # kJ/kg*K     cp of gas (combustion products)
-        self.g = 9.81 # m/s^2   # gravitational constant
-        self.gc = 1   # N / (m/s^2) Gravitational Conversion
+        self.R = kwargs.get('R',287) # J/kg*K    R value of Air
+        self.gam_a = kwargs.get('Gamma_a',1.4  )      # Gamma value of air
+        self.gam_g = kwargs.get('Gamma_g',4/3)       # Gamma value of gas (combustion products)
+        self.cp_a = kwargs.get('cp_a',1.005) # kJ/kg*K     cp of air
+        self.cp_g = kwargs.get('cp_g',1.148) # kJ/kg*K     cp of gas (combustion products)
+        self.g = kwargs.get('g',9.81) # m/s^2   # gravitational constant
+        self.gc = kwargs.get('gc',1)   # N / (m/s^2) Gravitational Conversion
         
         # General properties that could be used by all stages 
         # so all components know the atm conditions
@@ -145,6 +151,41 @@ class Stage():
     def extraOutputs(self):
         # Overwrite this and put any extra outputs here within individual stages
         return None
+    
+    def StageValues(self):
+        inputs = {
+            'Vi':self.Vi,
+            'Mi':self.Mi,
+            'Ti':self.Ti,
+            'Toi':self.Toi,
+            'Pi': self.Pi,
+            'Poi':self.Poi,
+            }
+        
+        outputs = {
+            'Ve':self.Ve,
+            'Me':self.Me,
+            'Te':self.Te,
+            'Toe':self.Toe,
+            'Pe':self.Pe,
+            'Poe':self.Poe}
+            
+        performance = {
+            'mdot': self.m_dot,
+            'mdot_ratio': self.mdot_ratio,
+            'BPR': self.BPR,
+            'Power':self.Power,
+            'SpecPower':self.SpecPower,
+            'ni':self.ni,
+            'np': None if not hasattr(self,'np') else self.np
+            }
+        
+        stageVals = {
+            'Stage': self.StageName,
+            'inputs': inputs,
+            'outputs': outputs,
+            'performance': performance}
+        return stageVals
 
 # =============================================================================
 # Compressor Simple Stage Description
@@ -197,8 +238,14 @@ class Compressor(Stage):
         # and output To and Po. r will always be given, BPR will affect output 
         # to next stage
         if self.r == None:
-            raise EngineErrors.MissingValue('R-Press. Ratio','Compressor')
-        elif self.np == None:
+            if self.Poi != None and self.Poe != None:
+                self.r = self.Poe / self.Poi 
+            else:
+                raise EngineErrors.MissingValue('R-Press. Ratio','Compressor')
+        if self.np == None:
+            # If only isentropic efficiency is assumed to be 1 if not entered, send warning
+            if self.ni == 1:
+                raise Warning('WARNING: Compressor Polytropic Efficiency claculated from Isen. Eff = 1.')
             self.np = ((self.gam_a-1)/self.gam_a)*np.log(self.r) / \
                         np.log( (self.r**((self.gam_a-1)/self.gam_a) - 1)/self.ni + 1)
         
@@ -222,6 +269,7 @@ class Compressor(Stage):
         next_Stage_hot.Vi  = self.Ve
         next_Stage_hot.mdot_ratio = self.mdot_ratio
         
+        # Split airflow if there is bypass after this component
         if next_Stage_cold == None:
             next_Stage_hot.m_dot = self.m_dot
         else:
@@ -281,7 +329,7 @@ class Combustor(Stage):
         self.StageName = "Combustor"
         self.dTo = kwargs.get('dTb')
         self.dPo = kwargs.get('dPb_dec', 0) # the pressure loss within the compressor as a decimal (0.05 = 5% loss)
-        self.f  = kwargs.get('f')
+        self.f  = kwargs.get('f') # actual/real fuel-air-ratio 
         self.Q  = kwargs.get('Q_fuel')
         self.nb = kwargs.get('nb', 1) # Combustor efficiency
         
@@ -372,6 +420,24 @@ class Turbine(Stage):
         self.Poe = self.Poi*(1- (self.Toi-self.Toe)/self.Toi )**(1/m_frac)
     
         
+    
+    
+# =============================================================================
+# Mizer Simple Stage Description    
+# =============================================================================
+class Mixer(Stage):
+    def __init__(self, CoreMixStage, BypassMixStage, **kwargs):
+        Stage.__init__(self, **kwargs)
+        self.CoreMix = CoreMixStage
+        self.BypassMix = BypassMixStage
+        
+    def calculate(self):
+        
+        return None
+        
+
+
+
 # =============================================================================
 # Nozzle Simple Stage Description
 # =============================================================================
