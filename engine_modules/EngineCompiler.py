@@ -520,3 +520,253 @@ class Turbofan_DoubleSpool():
             if outs['mdot'] == None:
                 # calculate mdot
                 mdot = EPF.mdot_2(self.F, self.inputs('BPR'), outs['C9'], outs['C19'], outs['Ca'])
+                
+                
+                
+                
+
+class Turbojet_AfterBurner():
+    def __init__(self, **kwargs):
+        '''
+        A single spool turbojet engine with a fan with bypass, HPC, burner, HPT,
+        mixer, afterburner and nozzle. 
+        Parameters
+        ----------
+        **kwargs : Dictionary
+            Contains all needed and optional parameters with the keys listed below.
+            Required:
+            'Ta': Atmospheric static temperature
+            'Pa': Atmospheric static pressure
+            'pi_f' Fan Pressure Ratio
+            'pi_c':   Compressor Pressure Ratio
+            'T_turb_in': Turbine inlet temp (HP Turbine)
+            
+            Optional
+            'Vinf':  Or Minf
+            'Minf':  Or Vinf, if none its assumed stationary
+            'mdot_a': Mass flow rate of air into engine (kg/s) (lbm/s)
+            'Q_fuel': Heat energy of fuel, pass if real to calculate f and include fuel flow in power/velecity calcs
+            'F': Thrust of the engine produced
+            Efficiencies (Assumed to be 1 if not passed)
+            'ni': Inlet Isentropic Efficiency
+            'nj': Nozzle Isentropic Efficiency
+            'nf': Fan Isentropic Efficiency
+            'nc': Compressor Isentropic Efficiency
+            'nt': Turbine Isentropic Efficiency
+            'nb': Cobustor Efficincy
+            'nm': Mechanical Efficiency
+            'npf': Fan Polytropic Efficiency (overrides isentropic)
+            'npc': Compressor Polytropic Efficiency (overrides isentropic)
+            'npt': Turbine Polytropic Efficiency (overrides isentropic)
+            'pi_b': Total pressure ratio through the burner
+
+        Returns
+        -------
+        None.
+
+        '''
+        # Stages
+        # Atm moving
+        # Inlet
+        # Fan  (is a compressor)
+        # Bypass
+        # HP Compressor
+        # Combustor
+        # HP Turbine
+        # Mixer
+        # Afterburner
+        # Nozzle
+        self.inputs = kwargs.copy()
+        
+        self.units = kwargs.get('units', 'SI')
+        # Efficiencies
+        # ni = kwargs.get('ni',None) # Inlet
+        # nj = kwargs.get('nj',1) # Nozzle
+        # nf = kwargs.get('nf',1) # Compressor - Isentropic
+        # nc = kwargs.get('nc',1) # Compressor - Isentropic
+        # nt = kwargs.get('nt',1) # Turbine - Isentropic
+        # nt_lp = kwargs.get('nt_lp',1) # LP Turbine - Isentropic
+        eta_b = kwargs.get('nb',1) # Cobustor
+        eta_m = kwargs.get('nm',1) # Mechanical
+        npf = kwargs.get('npf') # Fan - Polytropic
+        npc = kwargs.get('npc') # Compressor - Polytropic
+        npt = kwargs.get('npt') # Turbine - Polytropic
+        # Pressure Ratios/Relations
+        pi_d = kwargs.get('pi_d') # Diffuser total pressure ratio
+        pi_b = kwargs.get('pi_b') # Combustor total pressure ratio
+        pi_f = kwargs.get('pi_f') # Fan PR
+        pi_c   = kwargs.get('pi_c')   # Compressor PR
+        pi_M  = kwargs.get('pi_M') # Mixer total pressure ratio
+        pi_n  = kwargs.get('pi_n') # Nozzle total pressure ratio
+        pi_AB = kwargs.get('pi_AB') # Afterburner total ressure raito
+        
+        # Turbine Inlet
+        To_ti = kwargs.get('T_turb_in') # K - Turbine inlet temp
+        # Air Mass flow
+        mdot = kwargs.get('mdot_a') # kg/s or lbm/s
+        
+        
+        # Get gas props
+        gen_kwargs = {
+            'Ta': kwargs.get('Ta'),
+            'Pa': kwargs.get('Pa'),
+            'Vinf': kwargs.get('Vinf'),
+            'Minf': kwargs.get('Minf'),
+            'Q_fuel':  kwargs.get('Q_fuel')}# kJ/kg
+        
+        simp = SS.Stage(units='Imp')
+        cp_a = simp.cp_a 
+        cp_g = simp.cp_g
+        gam_a = simp.gam_a 
+        gam_g = simp.gam_g
+        Ta =  kwargs.get('Ta')
+        tau_lambda = cp_g*To_ti / (cp_a*Ta)
+        tau_r = 1 + (kwargs.get['Minf']**2)*(gam_a + 1)/2
+        tau_c = pi_c**((gam_a-1)/(gam_a*npc))
+        tau_f = pi_f**((gam_a-1)/(gam_a*npf))
+        
+        
+        f = cp_a*Ta *(tau_lambda - tau_r*tau_c) / gen_kwargs['Q_fuel']
+        alpha_f = (eta_m*(1+f) * (tau_lambda/tau_c)*(1 - (pi_f/(pi_c*pi_b))**((gam_g-1)*npt/gam_g)) - (tau_c-1)) / (tau_f-1)
+        alpha = alpha_f*(1+f)    
+        
+        gen_kwargs['BPR'] = alpha # Need this here on case mdot=None
+        
+        
+        # self.F = kwargs.get('F')
+        
+        # Define each stage and pass in parameters
+        self.inlet     = SS.Intake(**gen_kwargs, m_dot=mdot, pi=pi_d)
+        self.fan       = SS.Compressor(**gen_kwargs, pi=pi_f, np=npf)
+        self.BP_duct   = SS.Duct(pi=1)
+        self.HP_comp   = SS.Compressor(**gen_kwargs, pi=pi_c, np=npc)
+        self.combustor = SS.Combustor(**gen_kwargs, Toe=To_ti, pi=pi_b, ni=eta_b)
+        self.HP_turb   = SS.Turbine([self.HP_comp, self.fan], **gen_kwargs, nm=eta_m, np=npt)
+        self.Mixer     = SS.Mixer(self.HP_turb, self.BP_duct, pi=pi_M)
+        self.Afterburner = SS.Combustor(**gen_kwargs, )
+        self.nozzle    = SS.Nozzle(**gen_kwargs) # Nozzle/Exhaust?
+        
+        # Set names for easier readout checks
+        self.fan.StageName = 'Fan'
+        self.nozzle.StageName = 'Hot Nozzle'
+        self.HP_turb.StageName = 'Turbine'
+        self.Afterburner.StageName = 'Afterburner'
+        
+
+        
+        # Define all stages in engine to iterate through
+        # Two dimensional since there is a bypass, ie one stage
+        # passes params to two different stages
+        self.AllStages = [[self.inlet, None ],
+                          [self.fan, None], 
+                          [self.HP_comp,  self.BP_duct],
+                          [self.combustor,None],
+                          [self.HP_turb, None],
+                          [self.Mixer, None],
+                          [self.Afterburner, None]
+                          [self.nozzle, None]]
+        
+    def calculate(self, printVals=True):
+        '''
+        Calculates the properties of the air throughout the engine.
+
+        Parameters
+        ----------
+        printVals : Bool, optional
+            When true, it will print out each components exit conditions. The default is True.
+
+        Returns
+        -------
+        None.
+
+        '''
+        for i in range(0,len(self.AllStages)):
+            # Calculate each row and print outputs
+            self.AllStages[i][0].calculate()
+            if printVals: self.AllStages[i][0].printOutputs()
+            # Check if current stage has a parallel (ie, prev stage passes air to 2 stages)
+            if self.AllStages[i][1] != None:
+                self.AllStages[i][1].calculate()
+                if printVals: self.AllStages[i][1].printOutputs()
+                
+            # Move forward/propogate
+            if i != len(self.AllStages)-1: # It is not at the end, so forward
+                if self.AllStages[i+1][1] != None: 
+                    # Means that this stage delivers to two stages: fan -> HPC & BP Noz
+                    self.AllStages[i][0].forward(self.AllStages[i+1][0],self.AllStages[i+1][1])
+                else:
+                    # Stage delivers to one stage
+                    self.AllStages[i][0].forward(self.AllStages[i+1][0])
+                    
+    def getOutputs(self):
+        '''
+        Returns a dictionary containing important values fromwithin the engine
+        using typical engine notaion. Must be run after calculate in order to contain values.
+
+        Returns
+        -------
+        outs : Dictionary
+            Conatins the following items:
+                'mdot_c' - bypass flow [kg/s]
+                'mdot_h1' - core flow  [kg/s]
+                'mdot_h2' - core flow + fuel [kg/s]
+                'mdot' - air flow into the engine [kg/s]
+                'Ca'  - Initial vel of air (rel to engine) [m/s]
+                'C9'  - Exhast vel of core    [m/s]
+                'C19' - Exhuast vel of bypass [m/s]
+                'Pa'   - Static atmospheric pressure [Pa]
+                'P9'   - Exit pressure of core noz   [Pa]
+                'P19'  - Exit pressure of bypass noz [Pa]
+                'To3': - Combustor inlet stagnation temp [K]
+                'To4': - Combustor outlet stagnation temp [K]
+                'nb':  - combustor efficiency
+                'dH':  - fuel energy  [kJ/kg]
+                'f':   - air to fuel ratio
+
+        '''
+        outs = {
+            'mdot_c': self.BP_nozzle.m_dot, # bypass flow
+            'mdot_h1': self.HP_comp.m_dot, # core flow
+            'mdot_h2': self.nozzle.m_dot, # core flow + fuel
+            'mdot': self.inlet.m_dot, # air flow in
+            'Ca': self.inlet.Vi, # Initial vel of air
+            'C9': self.nozzle.Ve, # Exhast vel of core
+            'C19': self.BP_nozzle.Ve, # Exhuast vel of bypass
+            'Pa': self.inputs.get('Pa'),
+            'P9': self.nozzle.Pe,    # Exit pressure of core noz
+            'P19': self.BP_nozzle.Pe,# Exit pressure of bypass noz
+            'To3': self.combustor.Toi, # combustor inlet temp
+            'To4': self.combustor.Toe, # combustor outlet temp
+            'nb': self.combustor.ni, # combustor efficiency
+            'dH': self.combustor.Q,  # fuel energy
+            'f': self.combustor.f    # air to fuel ratio
+            }
+        return outs
+    
+    def printInputs(self):
+        '''
+        Prints out all of the kwargs entered on intialization
+
+        Returns
+        -------
+        None.
+
+        '''
+        print('Turbofan Engine Inputs')
+        for key,val in self.inputs.items():
+            print('\t {}  =  {}'.format(key,val))
+            
+    def calculatePerformanceParams(self):
+        outs = self.getOutputs()
+        
+        # Calculate thrust or mdot if one is given and not the other
+        if self.F == None:
+            if outs['mdot'] != None:
+                # Calcualte thrust
+                self.F = EPF.Thrust_1(outs['mdot'], self.inputs['BPR'], outs['C9'], outs['C19'], outs['Ca'])
+        else:
+            if outs['mdot'] == None:
+                # calculate mdot
+                # mdot = EPF.mdot_2(self.F, sel)
+                return None 
+            

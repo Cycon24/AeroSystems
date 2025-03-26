@@ -293,7 +293,7 @@ class Intake(Stage):
         elif Minf < 1:
             eta_r = 1 
         elif Minf < 5:
-            eta_r = 1 - 0.075(Minf - 1)**1.35
+            eta_r = 1 - 0.075*(Minf - 1)**1.35
         else:
             eta_r = 800 / (Minf**4 + 935)
             
@@ -532,12 +532,12 @@ class Turbine(Stage):
 # Mizer Simple Stage Description    
 # =============================================================================
 class Mixer(Stage):
-    def __init__(self, EngineObj, CoreMixStage, BypassMixStage, **kwargs):
+    def __init__(self, CoreMixStage, BypassMixStage, **kwargs):
         Stage.__init__(self, **kwargs)
         self.StageName = "Mixer"
         self.CoreMix = CoreMixStage
         self.BypassMix = BypassMixStage
-        self.Engine = EngineObj
+        # self.Engine = EngineObj
         
     def calculate(self):
         if self.Mi == None and self.CoreMix.Me == None:
@@ -560,7 +560,7 @@ class Mixer(Stage):
         
         
         ## NEED TO GET ALL VALUES FOR THIS
-        alpha_m = (eta_m * (1 + f) * (tau_t / tau_c) * (1 - (pi_f/(pi_c*pi_b))**((gamma_t - 1)*e_t/gamma_t)) - (tau_c - 1)) / (tau_f - 1)
+        # alpha_m = (eta_m * (1 + f) * (tau_t / tau_c) * (1 - (pi_f/(pi_c*pi_b))**((gamma_t - 1)*e_t/gamma_t)) - (tau_c - 1)) / (tau_f - 1)
         
         return None
     
@@ -609,4 +609,11 @@ class Nozzle(Stage):
         self.Poe = self.Pe * (1 + (self.gam -1)*(self.Me**2)/2)**(self.gam/(self.gam -1))
        
 
-        
+class Duct(Stage):
+    def __init__(self, air_type='hot', **kwargs): 
+        self.StageName = 'Duct'
+    
+    def calculate(self):
+        self.Poe = self.pi * self.Poi 
+        self.Toe = self.Toi
+        self.tau = 1 
