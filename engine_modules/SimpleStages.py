@@ -11,15 +11,17 @@ Created on Thu Aug 24 09:45:15 2023
 20250307:
     - To Do: Maybe revsise stages to only house one set of gas properties as to unify equations 
     (but values of properties will be different in certain stages)
-    - To Do: Intake needs ram effect addition and efficiency
+    - Resolved 20250321: Intake needs ram effect addition and efficiency
     - To Do: Maybe reconfigure isentropic efficiency to be None by default to allow for calc of 
     efficiencies from given temp/pressure values when needed (and force declaration of efficiency)
+        20250321 - Resolved, but not complete changes in all stages (made ni=None by default)
 20250320:
     - Done: Allow for changing of units to SI/Imperial
     - Done: Update Intake stage to utilize intake pressure ratio if given 
     - Done: Update compressor stage 
     - To Do: Compressor stage uses an inputted BPR, need to determine a way to allow for mixer to determine BPR
-    - To Do: Add ram efficiency in Intake for M > 1 
+    - Resolved 20250321: Add ram efficiency in Intake for M > 1 
+    - Done: Updated compressor stage case structure to better handle varied inputs
     
 """
 import numpy as np
@@ -58,7 +60,6 @@ class Stage():
         # Units
         self.units = kwargs.get('Units', 'SI')
         # Constants
-        self.R = kwargs.get('R',287 if self.units=='SI' else 53.535)        # [J/kg*K] or [ft*lbf/R*lbm]    R value of Air
         self.gam_a = kwargs.get('Gamma_a',1.4)                              # Gamma value of air
         self.gam_g = kwargs.get('Gamma_g',4/3)                              # Gamma value of gas (combustion products)
         self.gam_ab = kwargs.get('Gamma_ab', 1.3)
@@ -66,6 +67,9 @@ class Stage():
         self.cp_g = kwargs.get('cp_g',1.148 if self.units=='SI' else 0.295) # [kJ/kg*K] or [BTU/lbm*R]  cp of gas (combustion products)
         self.cp_ab = kwargs.get('cp_ab',1.148 if self.units=='SI' else 0.295) # [kJ/kg*K] or [BTU/lbm*R]  cp of gas after burner (combustion products)
        
+        self.R = kwargs.get('R', self.cp_a*(self.gam_a - 1)/self.gam_a)        # [J/kg*K] or [ft*lbf/R*lbm]    R value of Air
+        self.R_g = kwargs.get('R_g', self.cp_g*(self.gam_g - 1)/self.gam_g)
+        self.R_ab = kwargs.get('R_ab', self.cp_ab*(self.gam_ab - 1)/self.gam_ab)
         
         self.g = kwargs.get('g',9.81 if self.units=='SI' else 32.174)       # [m/s^2] or [ft/s^2]       Gravitational constant
         self.gc = kwargs.get('gc',1 if self.units=='SI' else 32.174)        # [N/(kg*m/s^2)]  or [lbm*ft/lbf*s^2] Gravitational Conversion
@@ -99,7 +103,7 @@ class Stage():
         self.BPR = kwargs.get('BPR',1)
         
         # Isentropic Efficiency (basically stage efficiency)
-        self.ni = kwargs.get('ni', 1) # Isentropic efficiency
+        self.ni = kwargs.get('ni', None) # Isentropic efficiency
         
         # Pressure Ratio and Temperature ratio
         self.pi = kwargs.get('pi', None) # details total pressure losses in components
@@ -224,14 +228,31 @@ class Intake(Stage):
         
     def calculate(self):
         # Always assume Pi/Pa and Ti/Ta are given (atmos conditions)
+        # Cant always assume this, there is a ram affect and streamtubes
+        #   occuring outside the intake face
+        
+        # Ram Affects
+        self.eta_r = self.eta_r_det(self.Minf)
+        self.tau_r = 1 + (self.Minf**2)*(self.gam_a + 1)/2       # Totoal/static
+        self.pi_r  = self.tau_r**(self.gam_a / (self.gam_a - 1)) # Total/Static
+        # NOTE: tau_r and pi_r are the only ratios that are
+        # static and stagnation ratios
+        
+        # Correct the diffusor pressure ratio
+        self.pi = 1 if self.pi == None else self.pi 
+        self.pi_d = self.pi * self.eta_r
+        
+        # These may need corrected
         self.Pi = self.Pa
         self.Ti = self.Ta
         self.Vi = self.Vinf
         self.Mi = self.Minf
+        
         # If no vel or mach num inputted, assume stationary
         if self.Mi == None:
             if self.Vi == None:
                 self.Mi = 0
+                self.Vi = 0 
             else:
                 self.Mi = self.Vi/np.sqrt(self.gam_a*self.R*self.Ti*self.gc)
         else:
@@ -241,17 +262,42 @@ class Intake(Stage):
         # Now we should have mach num no matter what
         # and the static props (atm props)
         # Find inlet stag props        
-        self.Toi = self.Ti * (1 + (self.gam_a-1)*(self.Mi**2)/2)
-        self.Poi = self.Pi * (1 + self.ni*(self.Mi**2)*(self.gam_a-1)/2)**(self.gam_a/(self.gam_a-1))
+        self.Toi = self.Ti * self.tau_r
+        self.Poi = self.Pi * self.pi_r
+        # self.Pi * (1 + self.ni*(self.Mi**2)*(self.gam_a-1)/2)**(self.gam_a/(self.gam_a-1))
         
         # Find outlet stag props
-        self.pi = 1 if self.pi == None else self.pi 
         self.Toe = self.Toi # Adiabatic
-        self.Poe = self.pi * self.Poi # Inlet pressure ratio to find total pressure loss
+        self.Poe = self.pi_d * self.Poi # Inlet pressure ratio to find total pressure loss
         
         self.tau = self.Toe/self.Toi
         
+    def eta_r_det(self, Minf):
+        '''
+        Calculates the Ram Efficiency eta_r from the Mach number since
+        the equation used will vary depending on freestream Mach
         
+        Parameters
+        ----------
+        Minf : Float
+            Freastream Mach Number.
+        
+        Returns
+        -------
+        eta_r : Float
+            Ram Efficiency.
+        
+        '''
+        if Minf < 0:
+            EngineErrors.MissingValue("Minf is Negative", self.StageName)
+        elif Minf < 1:
+            eta_r = 1 
+        elif Minf < 5:
+            eta_r = 1 - 0.075(Minf - 1)**1.35
+        else:
+            eta_r = 800 / (Minf**4 + 935)
+            
+        return eta_r
 
 # =============================================================================
 # Compressor Simple Stage Description
@@ -261,7 +307,7 @@ class Compressor(Stage):
         Stage.__init__(self, **kwargs)
         self.StageName = "Compressor"
         # Adding PR and BPR
-        self.r = kwargs.get('rc') # Pressure Ratio of stage
+        # self.r = kwargs.get('rc') # Pressure Ratio of stage (pi)
         self.BPR = kwargs.get('BPR', 1) # Bypass Ratio: total mass flow (air)/mass flow through core
         self.np = kwargs.get('np') # Polytropic efficiency
         self.mdot_ratio = 1 # Starts as 1 for fan, will be updated by prior comp if
@@ -270,21 +316,36 @@ class Compressor(Stage):
         # Should always have input To and Po, need to calculate power
         # and output To and Po. r will always be given, BPR will affect output 
         # to next stage
-        if self.r == None:
+        if self.pi == None:
             if self.Poi != None and self.Poe != None:
-                self.r = self.Poe / self.Poi 
+                self.pi = self.Poe / self.Poi 
             else:
-                raise EngineErrors.MissingValue('r - Pressure Ratio','Compressor')
+                raise EngineErrors.MissingValue('pi(π) - Pressure Ratio','Compressor')
+        
         if self.np == None:
             # If only isentropic efficiency is assumed to be 1 if not entered, send warning
-            if self.ni == 1:
-                raise Warning('WARNING: Compressor Polytropic Efficiency claculated from Isen. Eff = 1.')
-            self.np = ((self.gam_a-1)/self.gam_a)*np.log(self.r) / \
-                        np.log( (self.r**((self.gam_a-1)/self.gam_a) - 1)/self.ni + 1)
+            if self.ni == None:
+                # No poly or isen efficiency, check if exit conditions are given
+                if self.tau == None and self.Toe == None:
+                    # No temp ratio or exit temp given. No way to proceed
+                    EngineErrors.MissingValue('ni or np (isentropic or polytropic efficiencies), or tau_c/pi_c.', self.StageName) 
+                else: 
+                    # have tau or Toe
+                    if self.tau == None:
+                        self.tau = self.Toe/self.Toi 
+                    
+                    self.np = (self.gam_a - 1) / (self.gam_a*np.log(self.tau) / np.log(self.pi))
+            else:
+                # Have isentropic efficiency, no exit conditions
+                # Canc calculate np from ni and pi.
+                self.np = ((self.gam_a-1)/self.gam_a)*np.log(self.pi) / \
+                            np.log( (self.pi**((self.gam_a-1)/self.gam_a) - 1)/self.ni + 1)
+                                    
+        # Now have np 
         
         n_frac =  (self.gam_a-1)/(self.gam_a*self.np)
-        self.Toe = self.Toi + self.Toi*(self.r**n_frac - 1)
-        self.Poe = self.r*self.Poi
+        self.Toe = self.Toi + self.Toi*(self.pi**n_frac - 1)
+        self.Poe = self.pi*self.Poi
         
         if self.m_dot == None:
             self.specPower = self.mdot_ratio*self.cp_a*(self.Toe-self.Toi)
@@ -292,9 +353,8 @@ class Compressor(Stage):
             self.Power = self.m_dot*self.cp_a*(self.Toe-self.Toi)
             self.specPower = self.Power/self.m_dot
             
-        self.pi = self.Poe/self.Poi 
-        self.tau = self.Toe/self.Toi
-        self.ni = self.calculate_nc(self.np, self.gam_a)
+        self.tau = self.Toe/self.Toi if self.tau == None else self.tau
+        self.ni = self.calculate_ni_c(self.np, self.gam_a) if self.ni == None else self.ni 
         # Done
         
         
@@ -337,7 +397,7 @@ class Compressor(Stage):
                 next_Stage_cold.Vi  = self.Ve
     
         
-    def calculate_nc(self, np, gamma=1.4):
+    def calculate_ni_c(self, np, gamma=1.4):
         '''
         Calculates isentropic efficiency of the compressor from the polytropic efficiency
         Parameters
@@ -352,8 +412,8 @@ class Compressor(Stage):
         Isentropic Efficiency.
 
         '''
-        nc = ( self.r**((self.gam_a-1)/self.gam_a) - 1 ) / ( self.r**((self.gam_a-1)/(self.gam_a*np)) - 1 )
-        return nc
+        ni_c = ( self.r**((self.gam_a-1)/self.gam_a) - 1 ) / ( self.r**((self.gam_a-1)/(self.gam_a*np)) - 1 )
+        return ni_c
         
   
 
@@ -370,10 +430,10 @@ class Combustor(Stage):
         # self.dPo = kwargs.get('dPb_dec', 0) # the pressure loss within the compressor as a decimal (0.05 = 5% loss)
         self.f  = kwargs.get('f') # actual/real fuel-air-ratio 
         self.Q  = kwargs.get('Q_fuel')
-        self.nb = kwargs.get('nb', 1) # Combustor efficiency
+        self.ni = kwargs.get('nb', 1) # Combustor efficiency
         
     def calculate(self):
-        # Assuming we have the Ti and Pi from compressor/prev stage
+        # Assuming we have the Toi and Poi from compressor/prev stage
         # We need to have the exit 
         if self.Toe == None: 
             # No Turbine inlet temp given
@@ -381,17 +441,18 @@ class Combustor(Stage):
                 # No combustor increase temp given
                 if self.f == None and self.Q == None:
                     # No air-fuel ratio given, cant calculate temps
-                    raise EngineErrors.MissingValue('Toe, dTo, or f&Q','Combustor')
+                    raise EngineErrors.MissingValue('Toe, dTo, or f&Q',self.StageName)
                 else: 
                     # We have f and Q to calculate exit temp
-                    f_ideal = self.f*self.nb # inputted f would be actual
-                    self.Toe = (f_ideal*self.Q + self.cp_a*self.Toi)/(self.cpg(1+f_ideal))
+                    f_ideal = self.f*self.ni # inputted f would be actual
+                    self.Toe = (f_ideal*self.Q + self.cp_a*self.Toi)/(self.cp_g(1+f_ideal))
             else:
                 # We dont have exit temp, but do have temp increase
                 self.Toe = self.Toi + self.dTo
-         # else: Dont need to use since we have what we need
-             # We have turbine inlet temp (Te)
+         
+         # Now we have exit temperature   
         self.pi = 1 if self.pi == None else self.pi 
+        self.tau = self.Toe / self.Toi
         self.Poe = self.Poi*self.pi 
         self.dTo = self.Toe - self.Toi # will use later for f calcs
         
@@ -404,9 +465,9 @@ class Combustor(Stage):
             self.m_dot += self.f*self.m_dot
         elif self.m_dot == None and self.f != None:
             self.mdot_ratio = (1+self.f)/(self.BPR + 1)
+        # NOTE THAT THIS USES BPR HERE WHICH WE WONT HAVE FOR P1
             
-        self.pi = self.Poe/self.Poi 
-        self.tau = self.Toe/self.Toi 
+        
         
             
 # =============================================================================
@@ -420,7 +481,7 @@ class Turbine(Stage):
         self.nm = kwargs.get('nm',1) # Mechanical efficiency
         self.Compressor = Comp_to_power # Could be list
         # Will have inlet temp, compressor power
-        self.r  = kwargs.get('rt') # Add for later, not used now
+        #self.r  = kwargs.get('rt') # Add for later, not used now
         # this will be for generators or when turbine pressure ratio is specified
         
     def calculate(self):
@@ -449,9 +510,9 @@ class Turbine(Stage):
         
             
         if self.np == None:
-            if self.r != None:
+            if self.pi != None:
                 # Calculate np
-                self.np = np.log(1- self.ni*(1 - self.r**((self.gam_g-1)/self.gam_g)))
+                self.np = np.log(1- self.ni*(1 - self.pi**((self.gam_g-1)/self.gam_g)))
                 self.np /= np.log(self.r)*(self.gam_g-1)/self.gam_g
             else:
                 print('Warning: insufficient parameters given to turbine')
