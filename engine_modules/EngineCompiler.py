@@ -22,8 +22,8 @@ To-Do List:
     
 """
 
-import EnginePerformanceFunctions as EPF
-import SimpleStages as SS
+import engine_modules.EnginePerformanceFunctions as EPF
+import engine_modules.SimpleStages as SS
 
 
 # =============================================================================
@@ -577,7 +577,7 @@ class Turbojet_AfterBurner():
         # Afterburner
         # Nozzle
         self.inputs = kwargs.copy()
-        self.UpdateInputs(**kwargs, ON_INITIATION=True)
+        self.UpdateInputs(kwargs, ON_INITIATION=True)
         
         
         
@@ -586,14 +586,14 @@ class Turbojet_AfterBurner():
             self.inputs[key] = new_inputs[key]
         
         
-        self.units = self.inputs.get('units', 'SI')
-        
+        self.units = self.inputs.get('Units', 'SI')
         # Efficiencies
-        eta_b = self.inputs.get('nb') # Cobustor
-        eta_m = self.inputs.get('nm') # Mechanical
-        npf = self.inputs.get('npf') # Fan - Polytropic
-        npc = self.inputs.get('npc') # Compressor - Polytropic
-        npt = self.inputs.get('npt') # Turbine - Polytropic
+        eta_b = self.inputs.get('eta_b') # Cobustor
+        eta_ab = self.inputs.get('eta_ab') # Afterburner
+        eta_m = self.inputs.get('eta_m') # Mechanical
+        npf = self.inputs.get('e_f') # Fan - Polytropic
+        npc = self.inputs.get('e_c') # Compressor - Polytropic
+        npt = self.inputs.get('e_t') # Turbine - Polytropic
         # Pressure Ratios/Relations
         pi_d = self.inputs.get('pi_d') # Diffuser total pressure ratio
         pi_b = self.inputs.get('pi_b') # Combustor total pressure ratio
@@ -601,26 +601,28 @@ class Turbojet_AfterBurner():
         pi_c   = self.inputs.get('pi_c')   # Compressor PR
         pi_M  = self.inputs.get('pi_M') # Mixer total pressure ratio
         pi_n  = self.inputs.get('pi_n') # Nozzle total pressure ratio
-        pi_AB = self.inputs.get('pi_AB') # Afterburner total ressure raito
+        pi_AB = self.inputs.get('pi_ab') # Afterburner total ressure raito
         
-        # Turbine Inlet
-        To_ti = self.inputs.get('T_turb_in') # K - Turbine inlet temp
+        # Turbine Inlet / Combustor Outlet
+        To_ti = self.inputs.get('Tt4') # K - Turbine inlet temp
+        To_ab_e = self.inputs.get('Tt7')
+        M6 = self.inputs.get('M6') # Needs to be set to turbine exit mach
         # Air Mass flow
         mdot = self.inputs.get('mdot_a') # kg/s or lbm/s
         
         self.gen_kwargs = {
+            'Units': self.units, 
             'Ta': self.inputs.get('Ta'),
             'Pa': self.inputs.get('Pa'),
             'Vinf': self.inputs.get('Vinf'),
             'Minf': self.inputs.get('Minf'),
-            'Q_fuel':  self.inputs.get('Q_fuel')}# kJ/kg
-            'cp_a'
-            'cp_g'
-            'cp_ab'
-            'Gamma_a'
-            'Gamma_g'
-            'Gamma_ab'
-            
+            'Q_fuel':  self.inputs.get('h_PR'),# kJ/kg
+            'cp_a': self.inputs.get('cp_c'),
+            'cp_g': self.inputs.get('cp_t'),
+            'cp_ab': self.inputs.get('cp_ab'),
+            'Gamma_a': self.inputs.get('Gamma_c'),
+            'Gamma_g': self.inputs.get('Gamma_t'),
+            'Gamma_ab': self.inputs.get('Gamma_ab')
             }
             
         
@@ -629,38 +631,56 @@ class Turbojet_AfterBurner():
         
         if ON_INITIATION:
             # Define each stage and pass in parameters
-            self.inlet     = SS.Intake(**gen_kwargs, m_dot=mdot, pi=pi_d)
-            self.fan       = SS.Compressor(**gen_kwargs, pi=pi_f, np=npf)
-            self.BP_duct   = SS.Duct(pi=1)
-            self.HP_comp   = SS.Compressor(**gen_kwargs, pi=pi_c, np=npc)
-            self.combustor = SS.Combustor(**gen_kwargs, Toe=To_ti, pi=pi_b, ni=eta_b)
-            self.HP_turb   = SS.Turbine([self.HP_comp, self.fan], **gen_kwargs, nm=eta_m, np=npt)
-            self.Mixer     = SS.Mixer(self.HP_turb, self.BP_duct, pi=pi_M)
-            self.Afterburner = SS.Combustor(**gen_kwargs, )
-            self.nozzle    = SS.Nozzle(**gen_kwargs) # Nozzle/Exhaust?
+            self.Inlet     = SS.Intake(**self.gen_kwargs, m_dot=mdot, pi=pi_d)
+            self.Fan       = SS.Compressor(**self.gen_kwargs, pi=pi_f, np=npf)
+            self.BP_duct   = SS.Duct(**self.gen_kwargs, pi=1)
+            self.Compressor   = SS.Compressor(**self.gen_kwargs, pi=pi_c, np=npc)
+            self.Combustor = SS.Combustor(**self.gen_kwargs, Toe=To_ti, pi=pi_b, ni=eta_b)
+            self.Turbine   = SS.Turbine([self.Compressor, self.Fan], **self.gen_kwargs, nm=eta_m, np=npt)
+            self.Mixer     = SS.Mixer(self.Turbine, self.BP_duct, **self.gen_kwargs, pi=pi_M)
+            self.Afterburner = SS.Combustor(**self.gen_kwargs, pi=pi_AB, ni=eta_ab)
+            self.Nozzle    = SS.Nozzle(air_type='hot',nozzle_type='CD',**self.gen_kwargs, pi=pi_n) 
             
             # Set names for easier readout checks
-            self.fan.StageName = 'Fan'
-            self.nozzle.StageName = 'Hot Nozzle'
-            self.HP_turb.StageName = 'Turbine'
+            self.Fan.StageName = 'Fan'
             self.Afterburner.StageName = 'Afterburner'
+            
+            # Set other conditions
+            self.Combustor.Toe = To_ti # Set combustor outlet temperature
+            self.Turbine.Me = M6
+            self.Afterburner.Toe = To_ab_e 
+            
             
             # Define all stages in engine to iterate through
             # Two dimensional since there is a bypass, ie one stage
             # passes params to two different stages
-            self.AllStages = [[self.inlet, None ],
-                              [self.fan, None], 
-                              [self.HP_comp,  self.BP_duct],
-                              [self.combustor,None],
-                              [self.HP_turb, None],
+            self.AllStages = [[self.Inlet, None ],
+                              [self.Fan, None], 
+                              [self.Compressor,  self.BP_duct],
+                              [self.Combustor,None],
+                              [self.Turbine, None],
                               [self.Mixer, None],
-                              [self.Afterburner, None]
-                              [self.nozzle, None]]
+                              [self.Afterburner, None],
+                              [self.Nozzle, None]]
             
         else:
             # Only pass values into each stage rather than all
-            
+             self.Inlet      .UpdateInputs(**self.gen_kwargs, m_dot=mdot, pi=pi_d)
+             self.Fan        .UpdateInputs(**self.gen_kwargs, pi=pi_f, np=npf)
+             self.BP_duct    .UpdateInputs(pi=1)
+             self.Compressor    .UpdateInputs(**self.gen_kwargs, pi=pi_c, np=npc)
+             self.Combustor  .UpdateInputs(**self.gen_kwargs, Toe=To_ti, pi=pi_b, ni=eta_b)
+             self.HP_turb    .UpdateInputs([self.Compressor, self.Fan], **self.gen_kwargs, nm=eta_m, np=npt)
+             self.Mixer      .UpdateInputs(self.HP_turb, self.BP_duct, **self.gen_kwargs, pi=pi_M)
+             self.Afterburner.UpdateInputs(**self.gen_kwargs, pi=pi_AB, ni=eta_ab)
+             self.Nozzle     .UpdateInputs(**self.gen_kwargs, pi=pi_n) 
+             
+             # Set other conditions
+             self.Combustor.Toe = To_ti # Set combustor outlet temperature
+             self.Turbine.Me = M6
+             self.Afterburner.Toe = To_ab_e 
         
+             
     def calculate(self, printVals=True):
         '''
         Calculates the properties of the air throughout the engine.
@@ -676,25 +696,33 @@ class Turbojet_AfterBurner():
 
         '''
         # Get gas props
-        cp_a = simp.cp_a 
-        cp_g = simp.cp_g
-        gam_a = simp.gam_a 
-        gam_g = simp.gam_g
-        Ta =  kwargs.get('Ta')
+        cp_a = self.Inlet.cp_a 
+        cp_g = self.Inlet.cp_g
+        gam_a = self.Inlet.gam_a 
+        gam_g = self.Inlet.gam_g
+        Ta =  self.inputs.get('Ta')
+        To_ti = self.Combustor.Toe
         tau_lambda = cp_g*To_ti / (cp_a*Ta)
-        tau_r = 1 + (kwargs.get['Minf']**2)*(gam_a + 1)/2
-        tau_c = pi_c**((gam_a-1)/(gam_a*npc))
-        tau_f = pi_f**((gam_a-1)/(gam_a*npf))
+        tau_r = 1 + (self.inputs.get('Minf')**2)*(gam_a + 1)/2
+        tau_c = self.Compressor.pi**((gam_a-1)/(gam_a*self.Compressor.np))
+        tau_f = self.Fan.pi**((gam_a-1)/(gam_a*self.Fan.np))
         
+        # print(locals())
+        f = cp_a*Ta *(tau_lambda - tau_r*tau_c) / self.inputs['h_PR']
+        alpha_f = (self.inputs['eta_m']*(1+f) * (tau_lambda/tau_c)*(1 - (self.Fan.pi/(self.Compressor.pi*self.Combustor.pi))**((gam_g-1)*self.Turbine.np/gam_g)) - (tau_c-1)) / (tau_f-1)
+        alpha = alpha_f*(1+f)   
+        # alpha = (tau_lambda*(tau_c-tau_f))/(tau_r*tau_c*(tau_f-1))  - (tau_c-1)/(tau_f-1)
+        # alpha_f = alpha / (1+f)
+        print(' f = {}\n alpha = {}\n alpha_f = {}'.format(f, alpha,alpha_f))
         
-        f = cp_a*Ta *(tau_lambda - tau_r*tau_c) / gen_kwargs['Q_fuel']
-        alpha_f = (eta_m*(1+f) * (tau_lambda/tau_c)*(1 - (pi_f/(pi_c*pi_b))**((gam_g-1)*npt/gam_g)) - (tau_c-1)) / (tau_f-1)
-        alpha = alpha_f*(1+f)    
+        self.inputs['BPR'] = alpha # Need this here on case mdot=None
+        self.inputs['BPR_f'] = alpha_f 
         
-        gen_kwargs['BPR'] = alpha # Need this here on case mdot=None
-        
-        
-        
+        # Pass into needed components
+        self.Fan.BPR = self.inputs['BPR']
+        self.Combustor.BPR = self.inputs['BPR']
+        self.Combustor.f = f 
+        self.Mixer.BPR_f = self.inputs['BPR_f']
         
         
         for i in range(0,len(self.AllStages)):

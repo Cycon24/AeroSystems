@@ -4,7 +4,7 @@ Created on Tue Nov 14 10:25:46 2023
 
 @author: cycon
 """
-import EngineErrors as EE
+import engine_modules.EngineErrors as EE
 
 
 def mdot_1(V, A, rho=None, T=None, P=None, R=287):

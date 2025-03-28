@@ -96,12 +96,13 @@ def calc_area(To, Po, V, mdot, gam=1.4, R=287):
     
 
 # Test
-To_i = 475
-Po_i = 4.552e5
-mdot = 9
-Area = 0.0389
-[T, P, rho] = calc_static_props_1(To_i, Po_i, mdot, Area, initial_g_dec=0.98, maxIter=10000, tolerance=1e-2)
-
-V = mdot/(rho*Area)
-[T, P, rho] = calc_static_props_2(To_i, Po_i, V)
-print('Area: {:.4f}'.format(calc_area(To_i, Po_i, V, mdot)))
+if __name__=='__main__':
+    To_i = 475
+    Po_i = 4.552e5
+    mdot = 9
+    Area = 0.0389
+    [T, P, rho] = calc_static_props_1(To_i, Po_i, mdot, Area, initial_g_dec=0.98, maxIter=10000, tolerance=1e-2)
+    
+    V = mdot/(rho*Area)
+    [T, P, rho] = calc_static_props_2(To_i, Po_i, V)
+    print('Area: {:.4f}'.format(calc_area(To_i, Po_i, V, mdot)))

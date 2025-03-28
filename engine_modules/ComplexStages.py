@@ -9,10 +9,10 @@ Created on Sun Jun 30 07:38:38 2024
     
 """
 import numpy as np
-from WorkDoneFactor import interp_wdf
+# from engine_modules.WorkDoneFactor import interp_wdf
 import pandas as pd
 
-from freeVortexCompressor import freeVortexCompressorMeanLine
+# from freeVortexCompressor import freeVortexCompressorMeanLine
             
 class compressor_stage():
     # Rotor and Stator, use 1 to denote inflow to rotor, 2 for between rotor
