@@ -26,8 +26,14 @@ Created on Thu Aug 24 09:45:15 2023
 """
 import numpy as np
 import engine_modules.EngineErrors as EngineErrors
-import sys
-sys.path.append("C:\\Users\\cycon\\Documents\\Modules")
+onLaptop = False
+
+import sys 
+if onLaptop:
+    pathstr = "C:\\Users\\cycon\\Documents\\Modules"
+else:
+    pathstr = 'C:\\Users\\Cycon Gaming Night\\Documents\\cModules'
+sys.path.append(pathstr)
 import _aerodynamics.GasDynamics as GD
 
 '''
@@ -81,6 +87,11 @@ class Stage():
         self.R_g = self.inputs.get('R_g', self.cp_g*(self.gam_g - 1)/self.gam_g)
         self.R_ab = self.inputs.get('R_ab', self.cp_ab*(self.gam_ab - 1)/self.gam_ab)
         
+        if self.units != 'SI':
+            self.R *= 778.16 # Comnvert to [ft*lbf/R*lbm] 
+            self.R_g *=  778.16
+            self.R_ab *= 778.16
+        
         self.g = self.inputs.get('g',9.81 if self.units=='SI' else 32.174)       # [m/s^2] or [ft/s^2]       Gravitational constant
         self.gc = self.inputs.get('gc',1 if self.units=='SI' else 32.174)        # [N/(kg*m/s^2)]  or [lbm*ft/lbf*s^2] Gravitational Conversion
         
@@ -120,7 +131,7 @@ class Stage():
         self.tau = self.inputs.get('tau', None)
        
         # Other properties
-        self.StageName = ""
+        # self.StageName = ""
         self.Power = None       # W or BTU/s    - Power
         self.SpecPower = None  #  J/kg or BTU/lbm - Specific Power
         
@@ -186,9 +197,9 @@ class Stage():
         if hasattr(self,'specPower'):
             if self.specPower != None:
                 print('\t Specific Pow = {} {}'.format(form, self.units_labels['Sp_P']).format(self.specPower))
-        self.extraOutputs()
+        self.extraOutputs(form)
     
-    def extraOutputs(self):
+    def extraOutputs(self,form):
         # Overwrite this and put any extra outputs here within individual stages
         return None
     
@@ -215,11 +226,12 @@ class Stage():
             'mdot_ratio': self.mdot_ratio,
             'BPR': self.BPR,
             'Power':self.Power,
-            'SpecPower':self.SpecPower,
+            'SpecPower': None if not hasattr(self,'specPower') else self.specPower,
             'ni':self.ni,
             'np': None if not hasattr(self,'np') else self.np,
             'pi': self.pi,
-            'tau': self.tau
+            'tau': self.tau,
+            'f':None if not hasattr(self,'f') else self.np,
             }
         
         stageVals = {
@@ -249,8 +261,9 @@ class Intake(Stage):
         
         # Ram Affects
         self.eta_r = self.eta_r_det(self.Minf)
-        self.tau_r = 1 + (self.Minf**2)*(self.gam_a + 1)/2       # Totoal/static
+        self.tau_r = 1 + (self.Minf**2)*(self.gam_a - 1)/2       # Totoal/static
         self.pi_r  = self.tau_r**(self.gam_a / (self.gam_a - 1)) # Total/Static
+        # print('RAM: \n\t eta {:.4f}\n\t tau {:.4f}\n\t pi {:.4f}'.format(self.eta_r, self.tau_r,self.pi_r))
         # NOTE: tau_r and pi_r are the only ratios that are
         # static and stagnation ratios
         
@@ -329,11 +342,11 @@ class Compressor(Stage):
    
     def UpdateInputs(self, **kwargs):
         Stage.UpdateInputs_Gen(self, **kwargs)
-        self.BPR = self.inputs.get('BPR', 1) # Bypass Ratio (α): total mass flow (air)/mass flow through core
+        self.BPR = self.inputs.get('BPR', 1) # Bypass Ratio (α): bypass mass flow (air)/mass flow through core (air)
         self.np = self.inputs.get('np') # Polytropic efficiency
         self.mdot_ratio = 1 # Starts as 1 for fan, will be updated by prior comp if
                             # different from 1 from forward section
-        
+        self.pi_overall = self.inputs.get('pi_overall')
         
     def calculate(self):
         # Should always have input To and Po, need to calculate power
@@ -401,15 +414,21 @@ class Compressor(Stage):
             else:
                 if self.m_dot != None:
                     # We have actual mass flow 
-                    # Note alpha = BPR = mdot_total / mdot_core
-                    m_dot_h = self.m_dot/(self.BPR) # Core 
+                    # Note alpha = BPR = mdot_bypass / mdot_core
+                    # mdot = mdot_core + mdot_bypass
+                    # mdot_core = mdot_bypass / BPR
+                    # mdot_core = (mdot - mdot_core) / BPR
+                    # mdot_core*BPR = mdot - mdot_core
+                    # mdot_core(BPR + 1) = mdot
+                    # mdot_core = mdot/(BPR + 1)
+                    m_dot_h = self.m_dot/(self.BPR+1) # Core 
                     m_dot_c = self.m_dot - m_dot_h
                     
                     next_Stage_hot.m_dot = m_dot_h
                     next_Stage_cold.m_dot = m_dot_c
                 else:
                     # No inputted mdot
-                    mdot_ratio_h = 1/(self.BPR) # Denotes mdot_core / mdot_total
+                    mdot_ratio_h = 1/(self.BPR + 1) # Denotes mdot_core / mdot_total
                     mdot_ratio_c = 1 - mdot_ratio_h
                     
                     next_Stage_hot.m_dot = None
@@ -465,6 +484,7 @@ class Combustor(Stage):
         self.Q  = self.inputs.get('Q_fuel')
         self.ni = self.inputs.get('nb', 1) # Combustor efficiency
         self.BPR = self.inputs.get('BPR',1)
+        self.IS_IDEAL = self.inputs.get('IS_IDEAL')
                 
     def calculate(self):
         # Assuming we have the Toi and Poi from compressor/prev stage
@@ -495,17 +515,25 @@ class Combustor(Stage):
                 # Assuming non-ideal, will calculate f and use in mass fuel flow
                 self.f = (self.cp_g*self.Toe - self.cp_a*self.Toi) / (self.ni*(self.Q - self.cp_g*self.Toe))
                 
-        if self.m_dot != None and self.f != None:
-            self.m_dot += self.f*self.m_dot
-        elif self.m_dot == None and self.f != None:
-            self.mdot_ratio = (1+self.f)/(self.BPR)
-        # mdot_ratio is mdot_combustor exit / mdot_fan (air total)
-        # BPR = alpha = mdot_fan / mdot_core 
+        # Note: f = mdot_fuel / mdot_core_air
+        if not self.IS_IDEAL:
+            # Only change mass flow rate if not ideal case
+            if self.m_dot != None and self.f != None:
+                self.m_dot += self.f*self.m_dot
+            elif self.m_dot == None and self.f != None:
+                self.mdot_ratio += self.f*self.mdot_ratio
+                
+        # final mdot_ratio is mdot_combustor exit / mdot_total_air
+        # BPR = alpha = mdot_bypass / mdot_core 
+        # its current mdot_ratio = mdot_core / mdot_total_air 
+        # 
         # f = mdot_fuel / mdot_core_air
         # mdot_be = mdot_c + f*mdot_c 
-        # mdot_be/mdot_air_total = (1+f)mdot_core/mdot_air = (1+f)/BPR
+        # mdot_be/mdot_air_total = (1+f)mdot_core/mdot_air = (1+f)/(1 + BPR)
             
-        
+    def extraOutputs(self,form):
+        if self.f != None:
+            print('\t f = {}'.format(form).format(self.f))
         
             
 # =============================================================================
@@ -607,6 +635,8 @@ class Mixer(Stage):
         R_16  = self.CoreMix.R
         P_t6 = self.CoreMix.Poe 
         P_t16 = self.BypassMix.Poe 
+        T_t6 = self.CoreMix.Toe 
+        T_t16 = self.BypassMix.Toe 
         
         M_16 = np.sqrt( (2/(gam_16 - 1)) * (( (P_t16/P_t6)*(1 + (M_6**2)*(gam_6 - 1)/2)**(gam_6/(gam_6-1))  )**((gam_16 - 1)/gam_16)  - 1)  )
         self.BypassMix.Me = M_16 
@@ -616,15 +646,49 @@ class Mixer(Stage):
         self.gam_6a = self.cp_6a / (self.cp_6a - self.R_6a)
         
         self.tau = (cp_6 / self.cp_6a) * (1 + self.BPR_f * (cp_16/cp_6)*(self.BypassMix.Toe/self.CoreMix.Toe)) / (1 + self.BPR_f)
-        
+        if self.pi==None:
+            # Use ideal pi 
+            A16_A6 = self.BPR_f*(P_t6/P_t16)*np.sqrt(T_t16/T_t6)*(GD.MassFlowParam_norm(M_6 ,gam_6)/(GD.MassFlowParam_norm(M_16,gam_16)))
+            phi = ((1+self.BPR_f)/(1/np.sqrt(GD.Rayleigh_phi_MS(M_6,gam_6)) + self.BPR_f*np.sqrt(R_16*gam_6*(T_t16/T_t6)/(R_6*gam_16*GD.Rayleigh_phi_MS(M_16,gam_16)))  )) \
+                * (self.R_6a*gam_6*self.tau)/(R_6*self.gam_6a)
+            M_6A = np.sqrt(2*phi / (1 - 2*self.gam_6a*phi + np.sqrt(1 - 2*(self.gam_6a+1)*phi)))
+            self.pi_ideal = ((1+self.BPR_f)*np.sqrt(self.tau)/(1+ A16_A6))*(GD.MassFlowParam_norm(M_6 ,gam_6)/(GD.MassFlowParam_norm(M_6A,self.gam_6a)))
+            self.pi = self.pi_ideal 
+            self.Me = M_6A
+            
         self.Toe = self.tau * self.CoreMix.Toe 
         self.Poe = self.pi * self.CoreMix.Poe
+       
         
         ## NEED TO GET ALL VALUES FOR THIS
         # alpha_m = (eta_m * (1 + f) * (tau_t / tau_c) * (1 - (pi_f/(pi_c*pi_b))**((gamma_t - 1)*e_t/gamma_t)) - (tau_c - 1)) / (tau_f - 1)
         
         return None
     
+    def forward(self, next_Stage):
+        next_Stage.Toi = self.Toe
+        next_Stage.Poi = self.Poe
+        next_Stage.Ti  = self.Te
+        next_Stage.Pi  = self.Pe
+        next_Stage.Mi  = self.Me
+        next_Stage.Vi  = self.Ve
+        next_Stage.m_dot = self.m_dot
+        next_Stage.mdot_ratio = self.mdot_ratio
+        
+        # next_Stage.cp_g = self.cp_6a 
+        # next_Stage.gam_g = self.gam_6a 
+        # next_Stage.R_g  = self.R_6a
+        # next_Stage.cp_a = self.cp_6a 
+        # next_Stage.gam_a = self.gam_6a 
+        # next_Stage.R_a  = self.R_6a
+        
+        next_Stage.cp_g = self.cp_ab 
+        next_Stage.gam_g = self.gam_ab  
+        next_Stage.R_g  = self.R_ab
+        next_Stage.cp_a = self.cp_ab 
+        next_Stage.gam_a = self.gam_ab 
+        next_Stage.R_a  = self.R_ab
+        
    
         
 
@@ -638,8 +702,10 @@ class Nozzle(Stage):
         Stage.__init__(self, **kwargs)
         if air_type == 'hot':
             self.gam = self.gam_g
+            self.R = self.R_g
         else:
             self.gam = self.gam_a
+            self.R = self.R
         self.nozzle_type = nozzle_type # 'C' for Converging, 'CD' for Conv-Div
         self.UpdateInputs(**kwargs)
         self.StageName = "Nozzle"
