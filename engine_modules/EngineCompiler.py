@@ -82,6 +82,8 @@ class EngineCreator():
         # Pull out types of stages, 
         
         
+        
+        
             
 # =============================================================================
 # Example Classes
@@ -620,14 +622,14 @@ class Turbojet_AfterBurner():
             'Vinf': self.inputs.get('Vinf'),
             'Minf': self.inputs.get('Minf'),
             'Q_fuel':  self.inputs.get('h_PR'),# kJ/kg
-            'cp_a': self.inputs.get('cp_c'),
-            'cp_g': self.inputs.get('cp_t'),
-            'cp_ab': self.inputs.get('cp_ab'),
-            'Gamma_a': self.inputs.get('Gamma_c'),
-            'Gamma_g': self.inputs.get('Gamma_t'),
-            'Gamma_ab': self.inputs.get('Gamma_ab'),
             'IS_IDEAL': self.inputs.get('IS_IDEAL')
             }
+        cp_air = self.inputs.get('cp_c')
+        cp_b = self.inputs.get('cp_t')
+        cp_ab =  self.inputs.get('cp_ab')
+        gam_air = self.inputs.get('Gamma_c')
+        gam_b =  self.inputs.get('Gamma_t')
+        gam_ab = self.inputs.get('Gamma_ab')
             
         
         # self.F = kwargs.get('F')
@@ -635,21 +637,19 @@ class Turbojet_AfterBurner():
         
         if ON_INITIATION:
             # Define each stage and pass in parameters
-            self.Inlet     = SS.Intake(**self.gen_kwargs, m_dot=mdot, pi=pi_d)
+            self.Inlet     = SS.Intake(**self.gen_kwargs, m_dot=mdot, pi=pi_d, cp_i=cp_air, Gamma_i=gam_air)
             self.Fan       = SS.Compressor(**self.gen_kwargs, pi=pi_f, np=npf)
             self.BP_duct   = SS.Duct(**self.gen_kwargs, pi=1)
             self.Compressor   = SS.Compressor(**self.gen_kwargs, pi=pi_c, np=npc, pi_overall=pi_overall)
-            self.Combustor = SS.Combustor(**self.gen_kwargs, Toe=To_ti, pi=pi_b, ni=eta_b)
+            self.Combustor = SS.Combustor(**self.gen_kwargs, Toe=To_ti, pi=pi_b, ni=eta_b, cp_e=cp_b, Gamma_e=gam_b)
             self.Turbine   = SS.Turbine([self.Compressor, self.Fan], **self.gen_kwargs, nm=eta_m, np=npt)
-            self.Mixer     = SS.Mixer(self.Turbine, self.BP_duct, **self.gen_kwargs, pi=pi_M)
-            self.Afterburner = SS.Combustor(**self.gen_kwargs, pi=pi_AB, ni=eta_ab, dTb=dTo_ab)
+            self.Mixer     = SS.Mixer(self.Turbine, self.BP_duct, **self.gen_kwargs, pi=pi_M, MIX_GAS_PROPERTIES=self.inputs.get('MIX_GAS_PROPERTIES'))
+            self.Afterburner = SS.Combustor(**self.gen_kwargs, pi=pi_AB, ni=eta_ab, dTb=dTo_ab, cp_e=cp_ab, Gamma_e=gam_ab)
             self.Nozzle    = SS.Nozzle(air_type='hot',nozzle_type='CD',**self.gen_kwargs, pi=pi_n) 
             
             # Set names for easier readout checks
             self.Fan.StageName = 'Fan'
             self.Afterburner.StageName = 'Afterburner'
-            self.Afterburner.cp_a = self.inputs.get('cp_t') 
-            self.Afterburner.gam_a = self.inputs.get('Gamma_t')
             
             # Set other conditions
             self.Combustor.Toe = To_ti # Set combustor outlet temperature
@@ -702,10 +702,10 @@ class Turbojet_AfterBurner():
 
         '''
         # Get gas props
-        cp_a = self.Inlet.cp_a 
-        cp_g = self.Inlet.cp_g
-        gam_a = self.Inlet.gam_a 
-        gam_g = self.Inlet.gam_g
+        cp_a = self.Inlet.cp_i 
+        cp_g = self.Combustor.cp_e
+        gam_a = self.Inlet.gam_i 
+        gam_g = self.Combustor.gam_e
         Ta =  self.inputs.get('Ta')
         To_ti = self.Combustor.Toe
         tau_lambda = cp_g*To_ti / (cp_a*Ta)
@@ -766,11 +766,11 @@ class Turbojet_AfterBurner():
             dPt = self.Turbine.Poe - self.BP_duct.Poe 
             error = dPt/(self.Turbine.Poe + self.BP_duct.Poe) #/self.Turbine.Poe 
             # print('dPt = {:.6f}   err = {:.6f}'.format(dPt,error))
-            if (abs(dPt) < 1e-4) and alpha < 0:
-                # Within error tolerance but with a negative BPR
-                self.Fan.pi *= 0.99 # Since alpha negative, reduccing fan pi will increase alpha on recalc
-                alpha += 0.1 # Fix BPR to positive
-                dPt = 1 # Adjsut dPt to not exit loop
+            # if (abs(dPt) < 1e-4) and alpha < 0:
+            #     # Within error tolerance but with a negative BPR
+            #     self.Fan.pi *= 0.99 # Since alpha negative, reduccing fan pi will increase alpha on recalc
+            #     alpha += 0.1 # Fix BPR to positive
+            #     dPt = 1 # Adjsut dPt to not exit loop
                 
         
         
@@ -778,7 +778,7 @@ class Turbojet_AfterBurner():
             for i in range(0,len(self.AllStages)):   
                  self.AllStages[i][0].printOutputs()
                  if self.AllStages[i][1] != None:
-                     if printVals: self.AllStages[i][1].printOutputs()
+                     self.AllStages[i][1].printOutputs()
             
                     
     def getOutputs(self):
@@ -872,7 +872,7 @@ class Turbojet_AfterBurner():
         # Thrust, since Pe = Pa no need to incorperate 
         gam_a = self.inputs.get('Gamma_c')
         gc = self.Inlet.gc
-        R = self.Inlet.R 
+        R = self.Inlet.R_i
         Ta = self.inputs.get('Ta')
         a0 = np.sqrt(gam_a*R*Ta*gc)
         Minf = self.inputs.get('Minf')
@@ -901,7 +901,14 @@ class Turbojet_AfterBurner():
             'eta_P':eta_P,
             'eta_O':eta_O,
             'alpha':alpha}
-        
         return outputs
-        
-        
+    
+    def getStageStagnationVals(self):
+        StageStagnationProps = {}
+        for i in range(0,len(self.AllStages)):   
+             stageOuts = self.AllStages[i][0].StageValues()['outputs']
+             StageStagnationProps[self.AllStages[i][0].StageName] = {'Poe': stageOuts['Poe'], 'Toe': stageOuts['Toe']}
+             if self.AllStages[i][1] != None:
+                 stageOuts = self.AllStages[i][1].StageValues()['outputs']
+                 StageStagnationProps[self.AllStages[i][1].StageName] = {'Poe': stageOuts['Poe'], 'Toe': stageOuts['Toe']}
+        return StageStagnationProps
