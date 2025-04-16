@@ -615,6 +615,11 @@ class Turbojet_AfterBurner():
         # Air Mass flow
         mdot = self.inputs.get('mdot_a') # kg/s or lbm/s
         
+        # Should have some overall engine restrictions
+        BPR_Min = 0 
+        Compressor_Max_Toe = 3000 
+        Throttle_Setting = 1 # %
+        
         self.gen_kwargs = {
             'Units': self.units, 
             'Ta': self.inputs.get('Ta'),
@@ -780,53 +785,7 @@ class Turbojet_AfterBurner():
                  if self.AllStages[i][1] != None:
                      self.AllStages[i][1].printOutputs()
             
-                    
-    def getOutputs(self):
-        '''
-        Returns a dictionary containing important values fromwithin the engine
-        using typical engine notaion. Must be run after calculate in order to contain values.
-
-        Returns
-        -------
-        outs : Dictionary
-            Conatins the following items:
-                'mdot_c' - bypass flow [kg/s]
-                'mdot_h1' - core flow  [kg/s]
-                'mdot_h2' - core flow + fuel [kg/s]
-                'mdot' - air flow into the engine [kg/s]
-                'Ca'  - Initial vel of air (rel to engine) [m/s]
-                'C9'  - Exhast vel of core    [m/s]
-                'C19' - Exhuast vel of bypass [m/s]
-                'Pa'   - Static atmospheric pressure [Pa]
-                'P9'   - Exit pressure of core noz   [Pa]
-                'P19'  - Exit pressure of bypass noz [Pa]
-                'To3': - Combustor inlet stagnation temp [K]
-                'To4': - Combustor outlet stagnation temp [K]
-                'nb':  - combustor efficiency
-                'dH':  - fuel energy  [kJ/kg]
-                'f':   - air to fuel ratio
                 
-                
-
-        '''
-        outs = {
-            'mdot_c': self.BP_nozzle.m_dot, # bypass flow
-            'mdot_h1': self.HP_comp.m_dot, # core flow
-            'mdot_h2': self.nozzle.m_dot, # core flow + fuel
-            'mdot': self.inlet.m_dot, # air flow in
-            'Ca': self.inlet.Vi, # Initial vel of air
-            'C9': self.nozzle.Ve, # Exhast vel of core
-            'C19': self.BP_nozzle.Ve, # Exhuast vel of bypass
-            'Pa': self.inputs.get('Pa'),
-            'P9': self.nozzle.Pe,    # Exit pressure of core noz
-            'P19': self.BP_nozzle.Pe,# Exit pressure of bypass noz
-            'To3': self.combustor.Toi, # combustor inlet temp
-            'To4': self.combustor.Toe, # combustor outlet temp
-            'nb': self.combustor.ni, # combustor efficiency
-            'dH': self.combustor.Q,  # fuel energy
-            'f': self.combustor.f    # air to fuel ratio
-            }
-        return outs
     
     def printInputs(self):
         '''
@@ -912,3 +871,15 @@ class Turbojet_AfterBurner():
                  stageOuts = self.AllStages[i][1].StageValues()['outputs']
                  StageStagnationProps[self.AllStages[i][1].StageName] = {'Poe': stageOuts['Poe'], 'Toe': stageOuts['Toe']}
         return StageStagnationProps
+    
+    def getStageVals(self):
+        StageProps = {} 
+        
+        for i in range(0,len(self.AllStages)):   
+             stageOuts = self.AllStages[i][0].StageValues()
+             StageProps[self.AllStages[i][0].StageName] = stageOuts
+             
+             if self.AllStages[i][1] != None:
+                 stageOuts = self.AllStages[i][1].StageValues()
+                 StageProps[self.AllStages[i][1].StageName] = stageOuts
+        return StageProps

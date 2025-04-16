@@ -9,7 +9,7 @@ Created on Thu Aug 24 09:45:15 2023
     Moved engine definition portion into EngineCompiler.py
     Moved complex stage solving into ComplexStages.py
 20250307:
-    - To Do: Maybe revsise stages to only house one set of gas properties as to unify equations 
+    - Resolved 20250414: Maybe revsise stages to only house one set of gas properties as to unify equations 
     (but values of properties will be different in certain stages)
     - Resolved 20250321: Intake needs ram effect addition and efficiency
     - To Do: Maybe reconfigure isentropic efficiency to be None by default to allow for calc of 
@@ -19,7 +19,12 @@ Created on Thu Aug 24 09:45:15 2023
     - Done: Allow for changing of units to SI/Imperial
     - Done: Update Intake stage to utilize intake pressure ratio if given 
     - Done: Update compressor stage 
-    - To Do: Compressor stage uses an inputted BPR, need to determine a way to allow for mixer to determine BPR
+    - Resolved: Compressor stage uses an inputted BPR, need to determine a way to allow for mixer to determine BPR
+        20250414 (resolved prior but forgot to comment)
+        o Fixed on engine-level according to mixer inlet total pressure ratio is unity, aka
+        the ratio of total pressures from each stream entering the mixer must be 1, driving the 
+        calculation for the BPR.
+        o This relation is used to iterate upon the BPR to reach this condition
     - Resolved 20250321: Add ram efficiency in Intake for M > 1 
     - Done: Updated compressor stage case structure to better handle varied inputs
 20250407:
@@ -105,6 +110,7 @@ class Stage():
         
         self.g = self.inputs.get('g',9.81 if self.units=='SI' else 32.174)       # [m/s^2] or [ft/s^2]       Gravitational constant
         self.gc = self.inputs.get('gc',1 if self.units=='SI' else 32.174)        # [N/(kg*m/s^2)]  or [lbm*ft/lbf*s^2] Gravitational Conversion
+        self.gf = self.inputs.get('gf',1 if self.units=='SI' else 778.16)         # [kg*m^2/s^2 / J] or [ft*lbf/BTU]
         
         # General properties that could be used by all stages 
         # so all components know the atm conditions
@@ -279,6 +285,7 @@ class Stage():
         
         stageVals = {
             'Stage': self.StageName,
+            'Units': self.units_labels,
             'inputs': inputs,
             'outputs': outputs,
             'performance': performance}
@@ -557,7 +564,6 @@ class Combustor(Stage):
         self.f  = self.inputs.get('f') # actual/real fuel-air-ratio 
         self.Q  = self.inputs.get('Q_fuel')
         self.ni = self.inputs.get('nb', 1) # Combustor efficiency
-        self.BPR = self.inputs.get('BPR',1)
         self.IS_IDEAL = self.inputs.get('IS_IDEAL')
                 
     def calculate(self):
