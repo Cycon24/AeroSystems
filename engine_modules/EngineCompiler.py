@@ -719,6 +719,7 @@ class Turbojet_AfterBurner():
         tau_f = self.Fan.pi**((gam_a-1)/(gam_a*self.Fan.np))
         
         # print(locals())
+        # Get first-pass guess on alpha, will refine down the road
         f = cp_a*Ta *(tau_lambda - tau_r*tau_c) / self.inputs['h_PR']
         # alpha_f = (self.inputs['eta_m']*(1+f) * (tau_lambda/tau_c)*(1 - (self.Fan.pi/(self.Compressor.pi*self.Combustor.pi))**((gam_g-1)*self.Turbine.np/gam_g)) - (tau_c-1)) / (tau_f-1)
         # alpha = alpha_f*(1+f)   
@@ -738,7 +739,7 @@ class Turbojet_AfterBurner():
         dPt = 1
         while abs(dPt) > 1e-4:
             alpha += error 
-            alpha_f = alpha / (1+f)
+            alpha_f = alpha / (1+f) if self.Combustor.f == None else alpha / (1+self.Combustor.f)
             # print(' f = {}\n alpha = {}\n alpha_f = {}'.format(f, alpha,alpha_f))
             
             self.inputs['BPR'] = alpha # Need this here on case mdot=None
@@ -777,7 +778,7 @@ class Turbojet_AfterBurner():
             #     alpha += 0.1 # Fix BPR to positive
             #     dPt = 1 # Adjsut dPt to not exit loop
                 
-        
+    
         
         if printVals:
             for i in range(0,len(self.AllStages)):   
@@ -785,7 +786,106 @@ class Turbojet_AfterBurner():
                  if self.AllStages[i][1] != None:
                      self.AllStages[i][1].printOutputs()
             
+    def RunParameterSweep(self, paramKey, paramList, perfFunctions=None, printVals=False):
+        # Setup the output dictionary
+        # Needs to contain an item for each perfFunction
+        # Then the values within each perfFunction needs to be lists. 
+        # Lengths of lists based on param list, this needs to be defined
+        #   prior to running sweep
+        
+        arrayFormat = np.zeros((len(paramList),))
+        # Make output dic
+        finalOutputs = {paramKey: paramList}
+        
+        # If perf functions arent a list, make them one
+        if type(perfFunctions) != list:
+            perfFunctions = [perfFunctions]
+        for func in perfFunctions:
+            finalOutputs[func.__name__] = self.OutputsToEmptyOutputsArray(arrayFormat, func)
+        
+        
+        
+        for i, p in enumerate(paramList):
+            # Update inputs with parameter
+            # self.inputs[paramKey] = p
+            self.UpdateInputs(**{paramKey: p})
+            
+            # Run Calculation Loop
+            self.calculate(printVals=printVals)
+            
+            # Run output functions
+            if perfFunctions != None:
+                # Iterate through functions                  
+                for func in perfFunctions:
+                    # Get function outputs
+                    func_outs = func()
+                    # Run through each thing in outputs
+                    for key in func_outs.keys():
+                        if type(func_outs[key]) == dict:
+                            # func outputs nested dict (assuming only 3 layers)
+                            for key2 in func_outs[key].keys():
+                                if type(func_outs[key][key2]) == dict:
+                                    for key3 in func_outs[key][key2].keys():
+                                        if type(func_outs[key][key2][key3]) != str:
+                                            finalOutputs[func.__name__][key][key2][key3][i] = func_outs[key][key2][key3]
+                                        else:
+                                            finalOutputs[func.__name__][key][key2][key3] = func_outs[key][key2][key3]
+                                
+                                elif type(func_outs[key][key2]) != str:
+                                    # Set an empty list as the value
+                                    finalOutputs[func.__name__][key][key2][i] = func_outs[key][key2]
+                                else:
+                                    finalOutputs[func.__name__][key][key2] = func_outs[key][key2]
+                        elif type(func_outs[key]) != str:
+                            finalOutputs[func.__name__][key][i] = func_outs[key]
+                        else:
+                            # Is a string
+                            finalOutputs[func.__name__][key] = func_outs[key]
+                        
+                                   
+        return finalOutputs
+        
+
+    def OutputsToEmptyOutputsArray(self, arrayFormat, func):
+        '''
+        Returns a dictionary containing lists in the same format as
+        the function 'func' outputs (which outputs a dict with single values)
+
+        Parameters
+        ----------
+        arrayFormat : np Array
+            An empty numpy array the same size as needed for param sweep.
+        func : Function
+            The performance/output function.
+
+        Returns
+        -------
+        funcOuts : Dict
+            Contains dict with values as lists.
+
+        '''
+        # Run the function
+        self.calculate(False)
+        funcOuts = func()
+        for key in funcOuts.keys():
+            if type(funcOuts[key]) == dict:
+                # func outputs nested dict (assuming only 3 layers)
+                for key2 in funcOuts[key].keys():
+                    if type(funcOuts[key][key2]) == dict:
+                        for key3 in funcOuts[key][key2].keys():
+                            if type(funcOuts[key][key2][key3]) != str:
+                                funcOuts[key][key2][key3] = arrayFormat.copy()
+                            
+                    elif type(funcOuts[key][key2]) != str:
+                        # Set an empty list as the value
+                        funcOuts[key][key2] = arrayFormat.copy()
+                        
+            elif type(funcOuts[key]) != str:
+                funcOuts[key] = arrayFormat.copy()
                 
+        return funcOuts
+                                  
+               
     
     def printInputs(self):
         '''
@@ -850,6 +950,9 @@ class Turbojet_AfterBurner():
         eta_P = 2*Minf * (self.Nozzle.Ve/a0 - Minf) / ((self.Nozzle.Ve/a0)**2 - Minf**2)
         eta_O = eta_T * eta_P 
         
+        # STILL INCORRECT FOR SOME REASON
+        # tau_lambda = (self.Turbine.cp_e/self.Compressor.cp_e)*(self.Combustor.Toe/self.inputs['Ta'])
+        # alpha_2 = ((tau_lambda/(self.Inlet.tau_r*self.Fan.tau))*(1+f_b)*(self.Turbine.tau-1) + self.Fan.tau - self.Compressor.tau/self.Fan.tau)/(1-self.Fan.tau)
         outputs = {
             'F_mdot': F_mdot,
             'S':SFC,
@@ -860,6 +963,7 @@ class Turbojet_AfterBurner():
             'eta_P':eta_P,
             'eta_O':eta_O,
             'alpha':alpha}
+        # print('M0 = {:.2f}\tα1 = {:.3f}\tα2 = {:.3f}'.format(Minf, alpha, alpha_2))
         return outputs
     
     def getStageStagnationVals(self):
