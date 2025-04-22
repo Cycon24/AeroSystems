@@ -34,7 +34,7 @@ Created on Thu Aug 24 09:45:15 2023
 """
 import numpy as np
 import engine_modules.EngineErrors as EngineErrors
-onLaptop = True
+onLaptop = False
 
 import sys 
 if onLaptop:
@@ -316,31 +316,33 @@ class Intake(Stage):
             else:
                 self.gam_i = 1.4  # Gamma value of air
                 self.cp_i = 1.005 if self.units=='SI' else 0.240 # [kJ/kg*K] or [BTU/lbm*R]  cp of air
-                self.R_i = self.cp_i*(self.gam_i - 1)/self.gam_i        # [J/kg*K] or [ft*lbf/R*lbm]    R value of Air
-                if self.units != 'SI':
-                    self.R_i *= 778.16 # Comnvert to [ft*lbf/R*lbm] 
+                self.R_i = self.gf*self.cp_i*(self.gam_i - 1)/self.gam_i        # [J/kg*K] or [ft*lbf/R*lbm]    R value of Air
+                
         
-        self.R_i = self.cp_i*(self.gam_i - 1)/self.gam_i        # [J/kg*K] or [ft*lbf/R*lbm]    R value of Air
-        if self.units != 'SI':
-            self.R_i *= 778.16 # Comnve
+        self.R_i = self.gf*self.cp_i*(self.gam_i - 1)/self.gam_i        # [J/kg*K] or [ft*lbf/R*lbm]    R value of Air
+    
+        # Run external conditions
+        external = self.external_conditions(self.Minf)
+        self.D_additive = external.get('D_add', None)
+        self.m_dot = external.get('mdot', self.m_dot)
+        self.Mi = external.get('M1', self.Mi)
+        self.A0 = external.get('A0', None)
         
         # Ram Affects
-        self.eta_r = self.eta_r_det(self.Minf)
-        self.tau_r = 1 + (self.Minf**2)*(self.gam_i - 1)/2       # Totoal/static
-        self.pi_r  = self.tau_r**(self.gam_i / (self.gam_i - 1)) # Total/Static
+        self.eta_r = external['eta_r'] # Pt1/Pt0 
+        self.tau_r = 1 + (self.Minf**2)*(self.gam_i - 1)/2       # Totoal/static (Tt0/T0)
+        self.pi_r  = self.tau_r**(self.gam_i / (self.gam_i - 1)) # Total/Static  (Pt0/P0)
         # print('RAM: \n\t eta {:.4f}\n\t tau {:.4f}\n\t pi {:.4f}'.format(self.eta_r, self.tau_r,self.pi_r))
         # NOTE: tau_r and pi_r are the only ratios that are
         # static and stagnation ratios
         
         # Correct the diffusor pressure ratio
-        self.pi = 1 if self.pi == None else self.pi 
-        self.pi_d = self.pi * self.eta_r
+        self.pi = 1 if self.pi == None else self.pi # Pt2/Pt1
+        self.pi_d = self.pi * self.eta_r # total pressure loss from freestream to diffuser exit: Pt2/Pt0
         
-        # These may need corrected
-        self.Pi = self.Pa
-        self.Ti = self.Ta
-        self.Vi = self.Vinf
-        self.Mi = self.Minf
+        
+        # self.Vi = self.Vinf
+        self.Mi = self.Minf if self.Mi == None else self.Mi
         
         # If no vel or mach num inputted, assume stationary
         if self.Mi == None:
@@ -349,20 +351,23 @@ class Intake(Stage):
                 self.Vi = 0 
             else:
                 self.Mi = self.Vi/np.sqrt(self.gam_i*self.R_i*self.Ti*self.gc)
-        else:
-            if self.Vi == None:
-                self.Vi = self.Mi*np.sqrt(self.gam_i*self.R_i*self.Ti*self.gc)
+        # else:
+        #     if self.Vi == None:
+        #         self.Vi = self.Mi*np.sqrt(self.gam_i*self.R_i*self.Ti*self.gc)
         
         # Now we should have mach num no matter what
         # and the static props (atm props)
         # Find inlet stag props        
-        self.Toi = self.Ti * self.tau_r
-        self.Poi = self.Pi * self.pi_r
-        # self.Pi * (1 + self.ni*(self.Mi**2)*(self.gam_a-1)/2)**(self.gam_a/(self.gam_a-1))
+        self.Toi = self.Ta * self.tau_r
+        self.Poi = self.Pa * self.pi_r * self.eta_r # At station 1 (inlet plane)
+        
+        self.Pi = self.Poi / GD.Po_P_ratio(self.Mi, self.gam_i) # Corresponds to P1 (static pressure at inlet face, not freestream)
+        self.Ti = self.Toi / GD.To_T_ratio(self.Mi, self.gam_i) # Corresponds to T1 (static pressure at inlet face, not freestream
         
         # Find outlet stag props
         self.Toe = self.Toi # Adiabatic
-        self.Poe = self.pi_d * self.Poi # Inlet pressure ratio to find total pressure loss
+        self.Poe = self.pi * self.Poi # Using only pi_dmax because it is the pressure loss within diffuser. 
+                                      # Poi already contains pressure losses from external phenomena
         
         self.tau = self.Toe/self.Toi
         
@@ -370,10 +375,11 @@ class Intake(Stage):
         self.cp_e = self.cp_i 
         self.R_e = self.R_i
         
-    def eta_r_det(self, Minf):
+    def external_conditions(self, Minf):
         '''
         Calculates the Ram Efficiency eta_r from the Mach number since
-        the equation used will vary depending on freestream Mach
+        the equation used will vary depending on freestream Mach. Can be 
+        replaced by an outside function that uses the same inputs/outputs
         
         Parameters
         ----------
@@ -382,8 +388,13 @@ class Intake(Stage):
         
         Returns
         -------
-        eta_r : Float
-            Ram Efficiency.
+        Outputs : Dict
+            Necessary:
+                'eta_r' - Ram Efficiency
+            Recomended:
+                'mdot'  - Mass Flow rate into inlet
+                'D_add' - Streamtube Additive Drag
+                'M1'    - Mach Number at Inlet plane
         
         '''
         if Minf < 0:
@@ -395,8 +406,20 @@ class Intake(Stage):
         else:
             eta_r = 800 / (Minf**4 + 935)
             
-        return eta_r
-
+        return {'eta_r': eta_r}
+    
+    def StageValues(self):
+        outs = Stage.StageValues(self)
+        outs['performance']['tau_r'] = self.tau_r
+        outs['performance']['pi_r'] = self.pi_r
+        outs['performance']['eta_r'] = self.eta_r
+        outs['performance']['pi_d'] = self.pi_d
+        outs['performance']['pi_max'] = self.pi
+        outs['performance']['A0'] = self.A0
+        outs['performance']['D_add'] = self.D_additive
+        
+        return outs
+        
 # =============================================================================
 # Compressor Simple Stage Description
 # =============================================================================
@@ -503,15 +526,22 @@ class Compressor(Stage):
                     
                     next_Stage_hot.m_dot = m_dot_h
                     next_Stage_cold.m_dot = m_dot_c
+                    
+                    # mdot Ratio Calcs
+                    mdot_ratio_h = 1/(self.BPR + 1) # Denotes mdot_core / mdot_total
+                    mdot_ratio_c = 1 - mdot_ratio_h
+                    
+                    next_Stage_hot.mdot_ratio = mdot_ratio_h
+                    next_Stage_cold.mdot_ratio = mdot_ratio_c
+
                 else:
                     # No inputted mdot
                     mdot_ratio_h = 1/(self.BPR + 1) # Denotes mdot_core / mdot_total
                     mdot_ratio_c = 1 - mdot_ratio_h
                     
-                    next_Stage_hot.m_dot = None
                     next_Stage_hot.mdot_ratio = mdot_ratio_h
                     next_Stage_cold.mdot_ratio = mdot_ratio_c
-                    next_Stage_cold.m_dot = None
+   
                     # Dont need to send mdot ratio to cold section
                     
                 next_Stage_cold.Toi = self.Toe
@@ -544,7 +574,10 @@ class Compressor(Stage):
         ni_c = ( self.pi**((self.gam_i-1)/self.gam_i) - 1 ) / ( self.pi**((self.gam_i-1)/(self.gam_i*np)) - 1 )
         return ni_c
         
-  
+    def StageValues(self):
+        outs = Stage.StageValues(self)
+        outs['performance']['pi_overall'] = self.pi_overall
+        return outs
 
     
 # =============================================================================
@@ -571,9 +604,8 @@ class Combustor(Stage):
         # We need to have the exit 
         # Assuming that we have initial gas properties and exit gas properties were set from engine
         if self.R_e == None:
-            self.R_e = self.cp_e*(self.gam_e - 1)/self.gam_e        # [J/kg*K] or [ft*lbf/R*lbm]    R value of Air
-            if self.units != 'SI':
-                self.R_e *= 778.16 # Comnvert to [ft*lbf/R*lbm] 
+            self.R_e = self.gf*self.cp_e*(self.gam_e - 1)/self.gam_e        # [J/kg*K] or [ft*lbf/R*lbm]    R value of Air
+            
         
         
         if self.Toe == None: 
@@ -597,16 +629,17 @@ class Combustor(Stage):
         self.Poe = self.Poi*self.pi 
         self.dTo = self.Toe - self.Toi # will use later for f calcs
         
-        if self.f == None:
-            if self.Q != None: 
-                # Assuming non-ideal, will calculate f and use in mass fuel flow
-                self.f = (self.cp_e*self.Toe - self.cp_i*self.Toi) / (self.ni*(self.Q - self.cp_e*self.Toe))
+        # if self.f == None:
+        if self.Q != None: 
+            # Assuming non-ideal, will calculate f and use in mass fuel flow
+            self.f = (self.cp_e*self.Toe - self.cp_i*self.Toi) / (self.ni*(self.Q - self.cp_e*self.Toe))
                 
         # Note: f = mdot_fuel / mdot_core_air
         if not self.IS_IDEAL:
             # Only change mass flow rate if not ideal case
             if self.m_dot != None and self.f != None:
                 self.m_dot += self.f*self.m_dot
+                self.mdot_ratio += self.f*self.mdot_ratio
             elif self.m_dot == None and self.f != None:
                 self.mdot_ratio += self.f*self.mdot_ratio
                 
@@ -653,6 +686,7 @@ class Turbine(Stage):
                 self.Power = self.Compressor.Power/self.nm 
             # Calculate exit temp
             self.Toe = self.Toi - self.Power/(self.m_dot*self.cp_i)
+            self.specPower = self.Power/self.m_dot
         else:
             # No m_dot is given, need to power balance based on 
             # BPR ratios instead
@@ -715,6 +749,8 @@ class Mixer(Stage):
         # Assumes that gamma for bypass is the same for air 
         
         self.mdot_ratio = self.CoreMix.mdot_ratio + self.BypassMix.mdot_ratio
+        if self.m_dot != None:
+            self.m_dot = self.CoreMix.m_dot + self.BypassMix.m_dot
         
         # M_16 calculation
         # Gonna just rename values to make double checking equation easier
@@ -731,22 +767,35 @@ class Mixer(Stage):
         T_t16 = self.BypassMix.Toe 
         
         M_16 = np.sqrt( (2/(gam_16 - 1)) * (( (P_t16/P_t6)*(1 + (M_6**2)*(gam_6 - 1)/2)**(gam_6/(gam_6-1))  )**((gam_16 - 1)/gam_16)  - 1)  )
+        if abs(self.BPR) < 1e-4:
+            M_16 = 0.01
         self.BypassMix.Me = M_16 
         
         self.cp_6a = (cp_6 + self.BPR_f*cp_16) / (1 + self.BPR_f)
         self.R_6a = (R_6 + self.BPR_f*R_16) / (1 + self.BPR_f)
-        self.gam_6a = self.cp_6a / (self.cp_6a - self.R_6a)
+        self.gam_6a = self.cp_6a*self.gf / (self.cp_6a*self.gf - self.R_6a)
         
         self.tau = (cp_6 / self.cp_6a) * (1 + self.BPR_f * (cp_16/cp_6)*(self.BypassMix.Toe/self.CoreMix.Toe)) / (1 + self.BPR_f)
-        if self.pi==None:
+        
+        # if self.pi==None:
             # Use ideal pi 
-            A16_A6 = self.BPR_f*(P_t6/P_t16)*np.sqrt(T_t16/T_t6)*(GD.MassFlowParam_norm(M_6 ,gam_6)/(GD.MassFlowParam_norm(M_16,gam_16)))
-            phi = ((1+self.BPR_f)/(1/np.sqrt(GD.Rayleigh_phi_MS(M_6,gam_6)) + self.BPR_f*np.sqrt(R_16*gam_6*(T_t16/T_t6)/(R_6*gam_16*GD.Rayleigh_phi_MS(M_16,gam_16)))  )) \
-                * (self.R_6a*gam_6*self.tau)/(R_6*self.gam_6a)
-            M_6A = np.sqrt(2*phi / (1 - 2*self.gam_6a*phi + np.sqrt(1 - 2*(self.gam_6a+1)*phi)))
-            self.pi_ideal = ((1+self.BPR_f)*np.sqrt(self.tau)/(1+ A16_A6))*(GD.MassFlowParam_norm(M_6 ,gam_6)/(GD.MassFlowParam_norm(M_6A,self.gam_6a)))
-            self.pi = self.pi_ideal 
-            self.Me = M_6A
+        # A16_A6 = self.BPR_f*(P_t6/P_t16)*np.sqrt(T_t16/T_t6)*(GD.MassFlowParam_norm(M_6 ,gam_6)/(GD.MassFlowParam_norm(M_16,gam_16)))
+        # Calculate A16/A6
+        num = gam_16*R_6 * (1 + (M_16**2)*(gam_16-1)/2)
+        den = gam_6*R_16 * (1 + (M_6**2)*(gam_6-1)/2)
+        A16_A6 = self.BPR_f*np.sqrt(T_t16/T_t6)*(M_6/M_16) / np.sqrt(num/den)
+        self.A16_A6 = A16_A6
+        # Calculate phi(M6A, gam_6a):
+        num = 1 + self.BPR_f 
+        den = 1/np.sqrt(GD.Rayleigh_phi_MS(M_6,gam_6)) + self.BPR_f*np.sqrt(R_16*gam_6*(T_t16/T_t6)/(R_6*gam_16*GD.Rayleigh_phi_MS(M_16,gam_16)))
+        phi = ((num/den)**2)* (self.R_6a*gam_6*self.tau)/(R_6*self.gam_6a)
+        # Calculate M_6A
+        M_6A = np.sqrt(2*phi / (1 - 2*self.gam_6a*phi + np.sqrt(1 - 2*(self.gam_6a+1)*phi)))
+       
+        self.pi_ideal = ((1+self.BPR_f)*np.sqrt(self.tau)/(1+ A16_A6))*(GD.MassFlowParam_norm(M_6 ,gam_6)*np.sqrt(self.gc/R_6) / (GD.MassFlowParam_norm(M_6A,self.gam_6a)*np.sqrt(self.gc/self.R_6a)))
+
+        self.pi_M = self.pi_ideal *self.pi
+        self.Me = M_6A
             
         self.Toe = self.tau * self.CoreMix.Toe 
         self.Poe = self.pi * self.CoreMix.Poe
@@ -763,6 +812,14 @@ class Mixer(Stage):
         # alpha_m = (eta_m * (1 + f) * (tau_t / tau_c) * (1 - (pi_f/(pi_c*pi_b))**((gamma_t - 1)*e_t/gamma_t)) - (tau_c - 1)) / (tau_f - 1)
         
         return None
+    
+    def StageValues(self):
+        outs = Stage.StageValues(self)
+        outs['performance']['pi_ideal'] = self.pi_ideal
+        outs['performance']['pi_max'] = self.pi
+        outs['performance']['pi_M'] = self.pi_M
+        outs['performance']['A16/A6'] = self.A16_A6
+        return outs
     
 
 
@@ -835,6 +892,8 @@ class Nozzle(Stage):
         self.gam_e = self.gam_i 
         self.cp_e = self.cp_i 
         self.R_e = self.R_i 
+        
+   
 
 class Duct(Stage):
     def __init__(self, **kwargs): 
@@ -854,3 +913,5 @@ class Duct(Stage):
         self.gam_e = self.gam_i 
         self.cp_e = self.cp_i 
         self.R_e = self.R_i
+        
+    

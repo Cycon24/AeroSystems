@@ -737,9 +737,16 @@ class Turbojet_AfterBurner():
         # self.Mixer.BPR_f = self.inputs['BPR_f']
         error = 0
         dPt = 1
-        while abs(dPt) > 1e-4:
+        tol = 1e-4
+        while abs(dPt) > tol:
             alpha += error 
-            alpha_f = alpha / (1+f) if self.Combustor.f == None else alpha / (1+self.Combustor.f)
+            # check if alpha went < 0
+            if alpha < 0:
+                # print('Alpha set to 0')
+                alpha = 0 
+                alpha_f = 0 
+            else:
+                alpha_f = alpha / (1+f) if self.Combustor.f == None else alpha / (1+self.Combustor.f)
             # print(' f = {}\n alpha = {}\n alpha_f = {}'.format(f, alpha,alpha_f))
             
             self.inputs['BPR'] = alpha # Need this here on case mdot=None
@@ -769,10 +776,16 @@ class Turbojet_AfterBurner():
                         self.AllStages[i][0].forward(self.AllStages[i+1][0])
             
             # Check error
-            dPt = self.Turbine.Poe - self.BP_duct.Poe 
-            error = dPt/(self.Turbine.Poe + self.BP_duct.Poe) #/self.Turbine.Poe 
+            if abs(alpha) < tol:
+                dPt = 0 
+                error = 0 
+                # print('Warning: Bypass Ratio reached 0...')
+            else:
+                dPt = self.Turbine.Poe - self.BP_duct.Poe 
+                error = dPt/(self.Turbine.Poe + self.BP_duct.Poe) #/self.Turbine.Poe 
+            
             # print('dPt = {:.6f}   err = {:.6f}'.format(dPt,error))
-            # if (abs(dPt) < 1e-4) and alpha < 0:
+            # if (abs(dPt) < tol) and alpha < 0:
             #     # Within error tolerance but with a negative BPR
             #     self.Fan.pi *= 0.99 # Since alpha negative, reduccing fan pi will increase alpha on recalc
             #     alpha += 0.1 # Fix BPR to positive
@@ -931,6 +944,7 @@ class Turbojet_AfterBurner():
         # Thrust, since Pe = Pa no need to incorperate 
         gam_a = self.inputs.get('Gamma_c')
         gc = self.Inlet.gc
+        gf = self.Inlet.gf
         R = self.Inlet.R_i
         Ta = self.inputs.get('Ta')
         a0 = np.sqrt(gam_a*R*Ta*gc)
@@ -945,24 +959,39 @@ class Turbojet_AfterBurner():
         f_tot = f_b/(1 + alpha) + f_ab
         SFC = 3600*f_tot / F_mdot
         
-        eta_T = 0.5*(self.Nozzle.mdot_ratio*self.Nozzle.Ve**2 - V0**2) / (f_tot*h_PR*778.16*gc)
+
+        mdot_N = self.Nozzle.m_dot
+        Thrust = None if self.Nozzle.m_dot == None else F_mdot * mdot_N
+        Installed_Thrust =  None if self.Inlet.D_additive == None or Thrust == None else Thrust - self.Inlet.D_additive
+        T_mdot = None if Installed_Thrust == None else Installed_Thrust / self.Inlet.m_dot
+        mdot_f_tot =  None if self.Inlet.m_dot == None else f_tot * self.Inlet.m_dot
+        TSFC =  None if Installed_Thrust == None else 3600*mdot_f_tot / Installed_Thrust
+        
+        eta_T = 0.5*(self.Nozzle.mdot_ratio*self.Nozzle.Ve**2 - V0**2) / (f_tot*h_PR*gf*gc)
         #1 - 1 / (self.Inlet.tau_r * self.Compressor.tau)
         eta_P = 2*Minf * (self.Nozzle.Ve/a0 - Minf) / ((self.Nozzle.Ve/a0)**2 - Minf**2)
         eta_O = eta_T * eta_P 
+        
+        TPR = self.Inlet.eta_r * self.Inlet.pi * self.Inlet.pi_r
         
         # STILL INCORRECT FOR SOME REASON
         # tau_lambda = (self.Turbine.cp_e/self.Compressor.cp_e)*(self.Combustor.Toe/self.inputs['Ta'])
         # alpha_2 = ((tau_lambda/(self.Inlet.tau_r*self.Fan.tau))*(1+f_b)*(self.Turbine.tau-1) + self.Fan.tau - self.Compressor.tau/self.Fan.tau)/(1-self.Fan.tau)
         outputs = {
             'F_mdot': F_mdot,
+            'T_mdot': T_mdot,
+            'F': Thrust,
+            'T': Installed_Thrust,
             'S':SFC,
+            'TSFC': TSFC, 
             'f_b':f_b,
             'f_ab':f_ab,
             'f_tot':f_tot,
             'eta_T':eta_T,
             'eta_P':eta_P,
             'eta_O':eta_O,
-            'alpha':alpha}
+            'alpha':alpha,
+            'TPR': TPR}
         # print('M0 = {:.2f}\tα1 = {:.3f}\tα2 = {:.3f}'.format(Minf, alpha, alpha_2))
         return outputs
     
