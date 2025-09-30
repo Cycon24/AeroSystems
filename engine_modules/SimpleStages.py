@@ -83,6 +83,7 @@ class Stage():
             
         # Units
         self.units = self.inputs.get('Units', 'SI')
+        self.IS_IDEAL = self.inputs.get('IS_IDEAL', None)
         # Constants
         # self.gam_a = self.inputs.get('Gamma_a',1.4)                              # Gamma value of air
         # self.gam_g = self.inputs.get('Gamma_g',4/3)                              # Gamma value of gas (combustion products)
@@ -102,15 +103,18 @@ class Stage():
             
         # Maybe have gas properties passed along to better keep track of what gamma's are in each component
         self.gam_i = self.inputs.get('Gamma_i',None)      
-        self.cp_i =  self.inputs.get('cp_i',None) 
-        self.R_i =   self.inputs.get('R_i',None)  
+        self.cp_i =  self.inputs.get('cp_i',None) # [kJ/kg*K]
+        self.R_i =   self.inputs.get('R_i',None)  # [J/kg*K]
         self.gam_e = self.inputs.get('Gamma_e',None) 
         self.cp_e =  self.inputs.get('cp_e',None) 
         self.R_e =   self.inputs.get('R_e',None)  
         
         self.g = self.inputs.get('g',9.81 if self.units=='SI' else 32.174)       # [m/s^2] or [ft/s^2]       Gravitational constant
         self.gc = self.inputs.get('gc',1 if self.units=='SI' else 32.174)        # [N/(kg*m/s^2)]  or [lbm*ft/lbf*s^2] Gravitational Conversion
-        self.gf = self.inputs.get('gf',1 if self.units=='SI' else 778.16)         # [kg*m^2/s^2 / J] or [ft*lbf/BTU]
+        self.gf = self.inputs.get('gf',1000 if self.units=='SI' else 778.16)         # [kg*m^2/s^2 / J] or [ft*lbf/BTU]
+        # DEBUG WARNING gf above default value may need to be restored to 1, unsure
+        # what other calculations are included but this will convert R calculated later into
+        # J rather than kJ
         
         # General properties that could be used by all stages 
         # so all components know the atm conditions
@@ -304,6 +308,7 @@ class Intake(Stage):
     def UpdateInputs(self, **kwargs):
         Stage.UpdateInputs_Gen(self, **kwargs)
         
+        
     def calculate(self):
         # Always assume Pi/Pa and Ti/Ta are given (atmos conditions)
         # Cant always assume this, there is a ram affect and streamtubes
@@ -399,7 +404,7 @@ class Intake(Stage):
         '''
         if Minf < 0:
             EngineErrors.MissingValue("Minf is Negative", self.StageName)
-        elif Minf < 1:
+        elif Minf < 1: # or self.IS_IDEAL:
             eta_r = 1 
         elif Minf < 5:
             eta_r = 1 - 0.075*(Minf - 1)**1.35
@@ -604,8 +609,13 @@ class Combustor(Stage):
         # We need to have the exit 
         # Assuming that we have initial gas properties and exit gas properties were set from engine
         if self.R_e == None:
-            self.R_e = self.gf*self.cp_e*(self.gam_e - 1)/self.gam_e        # [J/kg*K] or [ft*lbf/R*lbm]    R value of Air
-            
+            try:
+                self.R_e = self.gf*self.cp_e*(self.gam_e - 1)/self.gam_e        # [J/kg*K] or [ft*lbf/R*lbm]    R value of Air
+            except:
+                self.R_e = self.R_i 
+                self.cp_e = self.cp_i 
+                self.gam_e = self.gam_i 
+                print("Warning: Combustor gas exit properties set to inputs.")
         
         
         if self.Toe == None: 
@@ -720,6 +730,8 @@ class Turbine(Stage):
         self.gam_e = self.gam_i 
         self.cp_e = self.cp_i 
         self.R_e = self.R_i
+        
+        self.ni = (1 - self.pi**((self.gam_e-1)*self.np/self.gam_e)) / (1 - self.pi**((self.gam_e-1)/self.gam_e))
     # Done
         
     

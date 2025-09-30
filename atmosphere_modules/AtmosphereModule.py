@@ -120,6 +120,7 @@ class Atmosphere():
         
         return propArray if np.size(h_range) > 1 else propArray[0]
     
+    @staticmethod
     def linterp(x, x_array, y_array):
         # Linearly interpolates the value of the target property(y) at x
         # Linterp: y = y1 + (y2 - y1) * (x - x1) / (x2 - x1)

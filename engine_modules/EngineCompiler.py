@@ -300,8 +300,7 @@ class Turbofan_SingleSpool():
                 # calculate mdot
                 mdot = EPF.mdot_2(self.F, self.inputs('BPR'), outs['C9'], outs['C19'], outs['Ca'])
                 
-                
-                
+
 
 
 
@@ -528,10 +527,10 @@ class Turbofan_DoubleSpool():
                 
                 
 
-class Turbojet_AfterBurner():
+class Turbofan_MixedFlow_AfterBurner():
     def __init__(self, **kwargs):
         '''
-        A single spool turbojet engine with a fan with bypass, HPC, burner, HPT,
+        A single spool turbofan engine with a fan with bypass, HPC, burner, HPT,
         mixer, afterburner and nozzle. 
         Parameters
         ----------
@@ -960,7 +959,417 @@ class Turbojet_AfterBurner():
         SFC = 3600*f_tot / F_mdot
         
 
-        mdot_N = self.Nozzle.m_dot
+        mdot_N = self.Inlet.m_dot
+        Thrust = None if self.Nozzle.m_dot == None else F_mdot * mdot_N
+        Installed_Thrust =  None if self.Inlet.D_additive == None or Thrust == None else Thrust - self.Inlet.D_additive
+        T_mdot = None if Installed_Thrust == None else Installed_Thrust / self.Inlet.m_dot
+        mdot_f_tot =  None if self.Inlet.m_dot == None else f_tot * self.Inlet.m_dot
+        TSFC =  None if Installed_Thrust == None else 3600*mdot_f_tot / Installed_Thrust
+        
+        eta_T = 0.5*(self.Nozzle.mdot_ratio*self.Nozzle.Ve**2 - V0**2) / (f_tot*h_PR*gf*gc)
+        #1 - 1 / (self.Inlet.tau_r * self.Compressor.tau)
+        eta_P = 2*Minf * (self.Nozzle.Ve/a0 - Minf) / ((self.Nozzle.Ve/a0)**2 - Minf**2)
+        eta_O = eta_T * eta_P 
+        
+        TPR = self.Inlet.eta_r * self.Inlet.pi * self.Inlet.pi_r
+        
+        # STILL INCORRECT FOR SOME REASON
+        # tau_lambda = (self.Turbine.cp_e/self.Compressor.cp_e)*(self.Combustor.Toe/self.inputs['Ta'])
+        # alpha_2 = ((tau_lambda/(self.Inlet.tau_r*self.Fan.tau))*(1+f_b)*(self.Turbine.tau-1) + self.Fan.tau - self.Compressor.tau/self.Fan.tau)/(1-self.Fan.tau)
+        outputs = {
+            'F_mdot': F_mdot,
+            'T_mdot': T_mdot,
+            'F': Thrust,
+            'T': Installed_Thrust,
+            'S':SFC,
+            'TSFC': TSFC, 
+            'f_b':f_b,
+            'f_ab':f_ab,
+            'f_tot':f_tot,
+            'eta_T':eta_T,
+            'eta_P':eta_P,
+            'eta_O':eta_O,
+            'alpha':alpha,
+            'TPR': TPR}
+        # print('M0 = {:.2f}\tα1 = {:.3f}\tα2 = {:.3f}'.format(Minf, alpha, alpha_2))
+        return outputs
+    
+    def getStageStagnationVals(self):
+        StageStagnationProps = {}
+        for i in range(0,len(self.AllStages)):   
+             stageOuts = self.AllStages[i][0].StageValues()['outputs']
+             StageStagnationProps[self.AllStages[i][0].StageName] = {'Poe': stageOuts['Poe'], 'Toe': stageOuts['Toe']}
+             if self.AllStages[i][1] != None:
+                 stageOuts = self.AllStages[i][1].StageValues()['outputs']
+                 StageStagnationProps[self.AllStages[i][1].StageName] = {'Poe': stageOuts['Poe'], 'Toe': stageOuts['Toe']}
+        return StageStagnationProps
+    
+    def getStageVals(self):
+        StageProps = {} 
+        
+        for i in range(0,len(self.AllStages)):   
+             stageOuts = self.AllStages[i][0].StageValues()
+             StageProps[self.AllStages[i][0].StageName] = stageOuts
+             
+             if self.AllStages[i][1] != None:
+                 stageOuts = self.AllStages[i][1].StageValues()
+                 StageProps[self.AllStages[i][1].StageName] = stageOuts
+        return StageProps
+    
+    
+    
+class Turbojet_Afterburner():
+    def __init__(self, **kwargs):
+        '''
+        A single spool turbojet engine with diffuser, HPC, burner, HPT,
+        afterburner and nozzle. 
+        Parameters
+        ----------
+        **kwargs : Dictionary
+            Contains all needed and optional parameters with the keys listed below.
+            Required:
+            'Ta': Atmospheric static temperature
+            'Pa': Atmospheric static pressure
+            'pi_c':   Compressor Pressure Ratio
+            'T_turb_in': Turbine inlet temp (HP Turbine)
+            
+            Optional
+            'Vinf':  Or Minf
+            'Minf':  Or Vinf, if none its assumed stationary
+            'mdot_a': Mass flow rate of air into engine (kg/s) (lbm/s)
+            'Q_fuel': Heat energy of fuel, pass if real to calculate f and include fuel flow in power/velecity calcs
+            
+            Efficiencies (Assumed to be 1 if not passed)
+            'ni': Inlet Isentropic Efficiency
+            'nj': Nozzle Isentropic Efficiency
+            'nc': Compressor Isentropic Efficiency
+            'nt': Turbine Isentropic Efficiency
+            'nb': Cobustor Efficincy
+            'nm': Mechanical Efficiency
+            'npc': Compressor Polytropic Efficiency (overrides isentropic)
+            'npt': Turbine Polytropic Efficiency (overrides isentropic)
+            
+            'pi_b': Total pressure ratio through the burner
+            'pi_ab': Total pressure ratio through after burner
+
+        Returns
+        -------
+        None.
+
+        '''
+        # Stages
+        # Atm moving
+        # Inlet
+        # HP Compressor
+        # Combustor
+        # HP Turbine
+        # Afterburner
+        # Nozzle
+        self.inputs = kwargs.copy()
+        self.UpdateInputs(ON_INITIATION=True, **kwargs)
+        
+        
+        
+    def UpdateInputs(self, ON_INITIATION=False, **new_inputs):
+        for key in new_inputs.keys():
+            self.inputs[key] = new_inputs[key]
+        
+        
+        self.units = self.inputs.get('Units', 'SI')
+        # Efficiencies
+        eta_b = self.inputs.get('eta_b') # Cobustor
+        eta_ab = self.inputs.get('eta_ab') # Afterburner
+        eta_m = self.inputs.get('eta_m') # Mechanical
+        eta_c = self.inputs.get('eta_c') # Compressor
+        eta_t = self.inputs.get('eta_t') # Turbine
+      
+        npc = self.inputs.get('e_c') # Compressor - Polytropic
+        npt = self.inputs.get('e_t') # Turbine - Polytropic
+        # Pressure Ratios/Relations
+        pi_d = self.inputs.get('pi_d') # Diffuser total pressure ratio
+        pi_b = self.inputs.get('pi_b') # Combustor total pressure ratio
+
+        pi_overall = self.inputs.get('pi_c')   # Compressor PR
+        pi_c  = pi_overall
+        
+        pi_n  = self.inputs.get('pi_n') # Nozzle total pressure ratio
+        pi_AB = self.inputs.get('pi_ab') # Afterburner total ressure raito
+        
+        # Turbine Inlet / Combustor Outlet
+        To_ti = self.inputs.get('Tt4') # K - Turbine inlet temp
+        To_ab_e = self.inputs.get('Tt7')
+        dTo_ab  = self.inputs.get('dTt_ab', None) # Change in total temp of Afterburner
+        
+        # Air Mass flow
+        mdot = self.inputs.get('mdot_a') # kg/s or lbm/s
+        
+        
+        self.gen_kwargs = {
+            'Units': self.units, 
+            'Ta': self.inputs.get('Ta'),
+            'Pa': self.inputs.get('Pa'),
+            'Vinf': self.inputs.get('Vinf'),
+            'Minf': self.inputs.get('Minf'),
+            'Q_fuel':  self.inputs.get('h_PR'),# kJ/kg
+            'IS_IDEAL': self.inputs.get('IS_IDEAL')
+            }
+        
+        cp_air = self.inputs.get('cp_c')
+        cp_b = self.inputs.get('cp_t')
+        cp_ab =  self.inputs.get('cp_ab')
+        gam_air = self.inputs.get('Gamma_c')
+        gam_b =  self.inputs.get('Gamma_t')
+        gam_ab = self.inputs.get('Gamma_ab')
+            
+        
+        # self.F = kwargs.get('F')
+        
+        
+        if ON_INITIATION:
+            # Define each stage and pass in parameters
+            self.Inlet     = SS.Intake(**self.gen_kwargs, m_dot=mdot, pi=pi_d, cp_i=cp_air, Gamma_i=gam_air)
+            self.Compressor   = SS.Compressor(**self.gen_kwargs, pi=pi_c, ni=eta_c,np=npc, pi_overall=pi_overall)
+            self.Combustor = SS.Combustor(**self.gen_kwargs, Toe=To_ti, pi=pi_b, ni=eta_b, cp_e=cp_b, Gamma_e=gam_b)
+            self.Turbine   = SS.Turbine(self.Compressor, **self.gen_kwargs, nm=eta_m, ni=eta_t, np=npt)
+            self.Afterburner = SS.Combustor(**self.gen_kwargs, pi=pi_AB, ni=eta_ab, dTb=dTo_ab, cp_e=cp_ab, Gamma_e=gam_ab)
+            self.Nozzle    = SS.Nozzle(air_type='hot',nozzle_type='CD',**self.gen_kwargs, pi=pi_n) 
+            
+            # Set names for easier readout checks
+            self.Afterburner.StageName = 'Afterburner'
+            
+            # Set other conditions
+            self.Combustor.Toe = To_ti # Set combustor outlet temperature 
+            self.Afterburner.Toe = To_ab_e # if delta is used, its already passed into afterburner definition
+            
+            
+            # Define all stages in engine to iterate through
+            # Two dimensional since there is a bypass, ie one stage
+            # passes params to two different stages
+            self.AllStages = [[self.Inlet, None ],
+                              [self.Compressor,  None],
+                              [self.Combustor,None],
+                              [self.Turbine, None],
+                              [self.Afterburner, None],
+                              [self.Nozzle, None]]
+            
+        else:
+            # Only pass values into each stage rather than all
+             self.Inlet      .UpdateInputs(**self.gen_kwargs, m_dot=mdot, pi=pi_d)
+             self.Compressor .UpdateInputs(**self.gen_kwargs, pi=pi_c, np=npc,pi_overall=pi_overall)
+             self.Combustor  .UpdateInputs(**self.gen_kwargs, Toe=To_ti, pi=pi_b, ni=eta_b)
+             self.Turbine    .UpdateInputs(self.Compressor, **self.gen_kwargs, nm=eta_m, np=npt)
+             self.Afterburner.UpdateInputs(**self.gen_kwargs, pi=pi_AB, ni=eta_ab)
+             self.Nozzle     .UpdateInputs(**self.gen_kwargs, pi=pi_n) 
+             
+             # Set other conditions
+             self.Combustor.Toe = To_ti # Set combustor outlet temperature
+             self.Afterburner.Toe = To_ab_e 
+        
+             
+    def calculate(self, printVals=True):
+        '''
+        Calculates the properties of the air throughout the engine.
+
+        Parameters
+        ----------
+        printVals : Bool, optional
+            When true, it will print out each components exit conditions. The default is True.
+
+        Returns
+        -------
+        None.
+
+        '''
+        # Since there isnt a need to iterate for this engine type, we can just calculate outright
+        # Get gas props
+                   
+        for i in range(0,len(self.AllStages)):
+            # Calculate each row and print outputs
+            self.AllStages[i][0].calculate()
+            # Check if current stage has a parallel (ie, prev stage passes air to 2 stages)
+            if self.AllStages[i][1] != None:
+                self.AllStages[i][1].calculate()
+                # if printVals: self.AllStages[i][1].printOutputs()
+                
+            # Move forward/propogate
+            if i != len(self.AllStages)-1: # It is not at the end, so forward
+                if self.AllStages[i+1][1] != None: 
+                    # Means that this stage delivers to two stages: fan -> HPC & BP Noz
+                    self.AllStages[i][0].forward(self.AllStages[i+1][0],self.AllStages[i+1][1])
+                else:
+                    # Stage delivers to one stage
+                    self.AllStages[i][0].forward(self.AllStages[i+1][0])
+            
+
+    
+        if printVals:
+            for i in range(0,len(self.AllStages)):   
+                 self.AllStages[i][0].printOutputs()
+                 if self.AllStages[i][1] != None:
+                     self.AllStages[i][1].printOutputs()
+            
+    def RunParameterSweep(self, paramKey, paramList, perfFunctions=None, printVals=False):
+        # Setup the output dictionary
+        # Needs to contain an item for each perfFunction
+        # Then the values within each perfFunction needs to be lists. 
+        # Lengths of lists based on param list, this needs to be defined
+        #   prior to running sweep
+        
+        arrayFormat = np.zeros((len(paramList),))
+        # Make output dic
+        finalOutputs = {paramKey: paramList}
+        
+        # If perf functions arent a list, make them one
+        if type(perfFunctions) != list:
+            perfFunctions = [perfFunctions]
+        for func in perfFunctions:
+            finalOutputs[func.__name__] = self.OutputsToEmptyOutputsArray(arrayFormat, func)
+        
+        
+        
+        for i, p in enumerate(paramList):
+            # Update inputs with parameter
+            # self.inputs[paramKey] = p
+            self.UpdateInputs(**{paramKey: p})
+            
+            # Run Calculation Loop
+            self.calculate(printVals=printVals)
+            
+            # Run output functions
+            if perfFunctions != None:
+                # Iterate through functions                  
+                for func in perfFunctions:
+                    # Get function outputs
+                    func_outs = func()
+                    # Run through each thing in outputs
+                    for key in func_outs.keys():
+                        if type(func_outs[key]) == dict:
+                            # func outputs nested dict (assuming only 3 layers)
+                            for key2 in func_outs[key].keys():
+                                if type(func_outs[key][key2]) == dict:
+                                    for key3 in func_outs[key][key2].keys():
+                                        if type(func_outs[key][key2][key3]) != str:
+                                            finalOutputs[func.__name__][key][key2][key3][i] = func_outs[key][key2][key3]
+                                        else:
+                                            finalOutputs[func.__name__][key][key2][key3] = func_outs[key][key2][key3]
+                                
+                                elif type(func_outs[key][key2]) != str:
+                                    # Set an empty list as the value
+                                    finalOutputs[func.__name__][key][key2][i] = func_outs[key][key2]
+                                else:
+                                    finalOutputs[func.__name__][key][key2] = func_outs[key][key2]
+                        elif type(func_outs[key]) != str:
+                            finalOutputs[func.__name__][key][i] = func_outs[key]
+                        else:
+                            # Is a string
+                            finalOutputs[func.__name__][key] = func_outs[key]
+                        
+                                   
+        return finalOutputs
+        
+
+    def OutputsToEmptyOutputsArray(self, arrayFormat, func):
+        '''
+        Returns a dictionary containing lists in the same format as
+        the function 'func' outputs (which outputs a dict with single values)
+
+        Parameters
+        ----------
+        arrayFormat : np Array
+            An empty numpy array the same size as needed for param sweep.
+        func : Function
+            The performance/output function.
+
+        Returns
+        -------
+        funcOuts : Dict
+            Contains dict with values as lists.
+
+        '''
+        # Run the function
+        self.calculate(False)
+        funcOuts = func()
+        for key in funcOuts.keys():
+            if type(funcOuts[key]) == dict:
+                # func outputs nested dict (assuming only 3 layers)
+                for key2 in funcOuts[key].keys():
+                    if type(funcOuts[key][key2]) == dict:
+                        for key3 in funcOuts[key][key2].keys():
+                            if type(funcOuts[key][key2][key3]) != str:
+                                funcOuts[key][key2][key3] = arrayFormat.copy()
+                            
+                    elif type(funcOuts[key][key2]) != str:
+                        # Set an empty list as the value
+                        funcOuts[key][key2] = arrayFormat.copy()
+                        
+            elif type(funcOuts[key]) != str:
+                funcOuts[key] = arrayFormat.copy()
+                
+        return funcOuts
+                                  
+               
+    
+    def printInputs(self):
+        '''
+        Prints out all of the kwargs entered on intialization
+
+        Returns
+        -------
+        None.
+
+        '''
+        print('Turbofan Engine Inputs')
+        for key,val in self.inputs.items():
+            print('\t {}  =  {}'.format(key,val))
+            
+   
+    def CalculatePerformanceParams(self):
+        '''
+        Need to get: 
+        F/mdot_0
+        SFC = f_tot / F/mdot0
+        f
+        f_AB
+        f_0 = f_b / (1+ alpha) + f_ab 
+        eta_T = 1 - 1 / (tau_r*tau_c)
+        eta_P = 2*Minf * (V9/a0 - Minf) / ((V9/a0)^2 - M0^2) 
+        eta_O = T*P
+        alpha
+
+        Returns
+        -------
+        Dict.
+            'F_mdot': Specific Thrust
+            'SFC': Thrust Specific Fuel Consumption
+            'f': Fuel-Air Ratio of Combustor
+            'f_AB': Fuel-Air Ratio of Afterburner
+            'f_tot': FUel-Air Ratio of total engine
+            'eta_T': Thermal Efficiency
+            'eta_P': Propulsion Efficiency
+            'eta_O': Overall Efficiency
+            'alpha': Bypass Ratio (mdot_bypass / mdot_core)
+
+        '''
+        # Thrust, since Pe = Pa no need to incorperate 
+        gam_a = self.inputs.get('Gamma_c')
+        gc = self.Inlet.gc
+        gf = self.Inlet.gf
+        R = self.Inlet.R_i
+        Ta = self.inputs.get('Ta')
+        a0 = np.sqrt(gam_a*R*Ta*gc)
+        Minf = self.inputs.get('Minf')
+        V0 = Minf*a0
+        h_PR = self.inputs.get('h_PR')
+        
+        F_mdot = (a0/gc)*(self.Nozzle.mdot_ratio*self.Nozzle.Ve/a0 - Minf)
+        f_b = self.Combustor.f
+        f_ab = self.Afterburner.f
+        alpha = 0 
+        f_tot = f_b/(1 + alpha) + f_ab
+        SFC = 3600*f_tot / F_mdot
+        
+
+        mdot_N = self.Inlet.m_dot
         Thrust = None if self.Nozzle.m_dot == None else F_mdot * mdot_N
         Installed_Thrust =  None if self.Inlet.D_additive == None or Thrust == None else Thrust - self.Inlet.D_additive
         T_mdot = None if Installed_Thrust == None else Installed_Thrust / self.Inlet.m_dot
