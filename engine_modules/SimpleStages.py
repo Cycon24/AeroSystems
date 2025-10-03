@@ -617,7 +617,6 @@ class Combustor(Stage):
                 self.gam_e = self.gam_i 
                 print("Warning: Combustor gas exit properties set to inputs.")
         
-        
         if self.Toe == None: 
             # No Turbine inlet temp given
             if self.dTo == None: 
@@ -632,7 +631,7 @@ class Combustor(Stage):
             else:
                 # We dont have exit temp, but do have temp increase
                 self.Toe = self.Toi + self.dTo
-         
+                 
          # Now we have exit temperature   
         self.pi = 1 if self.pi == None else self.pi 
         self.tau = self.Toe / self.Toi
@@ -642,8 +641,10 @@ class Combustor(Stage):
         # if self.f == None:
         if self.Q != None: 
             # Assuming non-ideal, will calculate f and use in mass fuel flow
-            self.f = (self.cp_e*self.Toe - self.cp_i*self.Toi) / (self.ni*(self.Q - self.cp_e*self.Toe))
-                
+            self.f = (self.cp_e*self.Toe - self.cp_i*self.Toi) / (self.ni*self.Q - self.cp_e*self.Toe)
+            if self.IS_IDEAL:
+                self.f = self.cp_i*(self.Toe-self.Toi) / self.Q
+            
         # Note: f = mdot_fuel / mdot_core_air
         if not self.IS_IDEAL:
             # Only change mass flow rate if not ideal case
@@ -665,6 +666,10 @@ class Combustor(Stage):
         if self.f != None:
             print('\t f = {}'.format(form).format(self.f))
         
+    def StageValues(self):
+        outs = Stage.StageValues(self)
+        outs['performance']['dTo'] = self.dTo
+        return outs
             
 # =============================================================================
 # Turbine Simple Stage Description
@@ -705,6 +710,7 @@ class Turbine(Stage):
                 for i in range(0,len(self.Compressor)):
                     com_power += self.Compressor[i].specPower
                 self.specPower = com_power/self.nm 
+               
             else:
                 self.specPower = self.Compressor.specPower/self.nm 
             # Calculate exit temp
@@ -753,9 +759,7 @@ class Mixer(Stage):
         self.MIX_GAS_PROPERTIES = self.inputs.get('MIX_GAS_PROPERTIES', True)
         
     def calculate(self):
-        if self.Mi == None and self.CoreMix.Me == None:
-            raise EngineErrors.MissingValue('Missing Coreflow Mach Number',self.StageName)
-            
+          
         # FOR PROJECT 1:
         # We have M6 (core exit Mach) and pi_M (pressure ratio for mixer)
         # Assumes that gamma for bypass is the same for air 
@@ -763,7 +767,28 @@ class Mixer(Stage):
         self.mdot_ratio = self.CoreMix.mdot_ratio + self.BypassMix.mdot_ratio
         if self.m_dot != None:
             self.m_dot = self.CoreMix.m_dot + self.BypassMix.m_dot
+            
+            
+        if self.IS_IDEAL:
+            # Calculate bypass ratio from core flow ratio
+            alpha = 1/self.CoreMix.mdot_ratio - 1
+            self.tau = (1 + alpha * (self.BypassMix.Toe/self.CoreMix.Toe)) / (1 + alpha)
+            self.pi = 1 if self.pi == None else self.pi
+            
+            self.Toe = self.tau * self.CoreMix.Toe 
+            self.Poe = self.pi * self.CoreMix.Poe
+            
+            self.gam_e =  self.CoreMix.gam_e
+            self.cp_e = self.CoreMix.cp_e
+            self.R_e = self.CoreMix.R_e 
+            # print(f"Mix Re = {self.R_e}")
         
+            return None
+        
+        # Check to ensure we have required mach numbers
+        if self.Mi == None and self.CoreMix.Me == None:
+            raise EngineErrors.MissingValue('Missing Coreflow Mach Number',self.StageName)
+          
         # M_16 calculation
         # Gonna just rename values to make double checking equation easier
         M_6 = self.CoreMix.Me 
@@ -827,10 +852,11 @@ class Mixer(Stage):
     
     def StageValues(self):
         outs = Stage.StageValues(self)
-        outs['performance']['pi_ideal'] = self.pi_ideal
-        outs['performance']['pi_max'] = self.pi
-        outs['performance']['pi_M'] = self.pi_M
-        outs['performance']['A16/A6'] = self.A16_A6
+        if not self.IS_IDEAL:
+            outs['performance']['pi_ideal'] = self.pi_ideal
+            outs['performance']['pi_max'] = self.pi
+            outs['performance']['pi_M'] = self.pi_M
+            outs['performance']['A16/A6'] = self.A16_A6
         return outs
     
 
