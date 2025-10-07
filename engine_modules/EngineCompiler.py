@@ -605,7 +605,8 @@ class Turbofan_MixedFlow_AfterBurner():
         pi_b = self.inputs.get('pi_b') # Combustor total pressure ratio
         pi_f = self.inputs.get('pi_f') # Fan PR
         pi_overall = self.inputs.get('pi_c')   # Compressor PR
-        pi_c  = pi_overall #if pi_f == None else pi_overall / pi_f
+        self.pi_c_overall = pi_overall
+        pi_c  = pi_overall if pi_f == None else pi_overall / pi_f
         pi_M  = self.inputs.get('pi_M') # Mixer total pressure ratio
         pi_n  = self.inputs.get('pi_n') # Nozzle total pressure ratio
         pi_AB = self.inputs.get('pi_ab') # Afterburner total ressure raito
@@ -835,6 +836,7 @@ class Turbofan_MixedFlow_AfterBurner():
                 # print(' f = {}\n alpha = {}\n alpha_f = {}'.format(f, alpha,alpha_f))
                 
                 # Update
+                # pi_c  = self.pi_c_overall if pi_f == None else self.pi_c_overall / pi_f
                 self.UpdateInputs(pi_f=pi_f)
                 
                 
