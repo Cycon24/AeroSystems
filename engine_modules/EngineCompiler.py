@@ -31,7 +31,7 @@ import numpy as np
 # Main Class that can generate any engine 
 # =============================================================================
 
-class EngineCreator():
+class Engine():
     def __init__(self, **kwargs):
         print('bla bla')
         
