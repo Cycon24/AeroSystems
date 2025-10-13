@@ -111,19 +111,10 @@ class Engine():
         
     def gen_CalculatePerformanceParams(self):
         '''
-        Need to get: 
-        F
-        T
-        F/mdot_0
-        T/mdot_0
-        SFC = f_tot / F/mdot0
-        f
-        f_AB
-        f_0 = f_b / (1+ alpha) + f_ab 
-        eta_T = 1 - 1 / (tau_r*tau_c)
-        eta_P = 2*Minf * (V9/a0 - Minf) / ((V9/a0)^2 - M0^2) 
-        eta_O = T*P
-        TPR
+        Calculates the performance parameters for any engine infrastructure. 
+        
+        NOTE: 202051013 - In the future may need to update thermal efficiency
+                        to include different h_PR's if different fuels are utilized.
 
         Returns
         -------
@@ -175,14 +166,18 @@ class Engine():
             f_tot += comb.f*comb.mdot_ratio / (1 + comb.f) if not comb.IS_IDEAL else comb.f*comb.mdot_ratio
         
         # Calculate thrust chars
-        F_mdot = 0 
+        noz_mom_sum = 0 
+        noz_pres_sum = 0
         D_noz  = 0
         KE_rat_noz = 0 
         for noz in Nozzles:
-            F_mdot += (a0/gc)*(noz.mdot_ratio*noz.Ve/a0 - Minf) + noz.Ae_mdota*(noz.Pe - Pa)
+            noz_mom_sum += noz.mdot_ratio*noz.Ve/a0
+            noz_pres_sum += noz.Ae_mdota*(noz.Pe - Pa)
+            
             D_noz  += 0 if noz.Drag == None else noz.Drag 
             KE_rat_noz  += noz.mdot_ratio*(noz.Ve)**2
-            
+          
+        F_mdot = (a0/gc)*(noz_mom_sum - Minf) + noz_pres_sum 
         SFC = 3600*f_tot / F_mdot
         
         # Calculate thrust if we have mass flow rate
