@@ -160,6 +160,8 @@ class Stage():
        
         # Other properties
         self.StageName = self.inputs.get('StageName', "Stage")
+        self.StageIdentifier = self.inputs.get('StageID', "s")
+        # self.StageType = "Stage"
         self.Power = None       # W or BTU/s    - Power
         self.SpecPower = None  #  J/kg or BTU/lbm - Specific Power
         
@@ -487,6 +489,12 @@ class Stage():
             'outputs': outputs,
             'performance': performance}
         return stageVals
+    
+    def __str__(self):
+        return self.StageType
+    
+    def _getID(self):
+        return self.StageIdentifier 
 
 # =============================================================================
 # Compressor Simple Stage Description
@@ -495,7 +503,8 @@ class Stage():
 class Intake(Stage):
     def __init__(self, **kwargs):
         Stage.__init__(self, **kwargs)
-        self.UpdateInputs(StageName = "Intake", AssumeSubsonicExit=True, **kwargs)
+        self.StageType = "Intake"
+        self.UpdateInputs(StageName = "Intake", StageID="d", AssumeSubsonicExit=True, **kwargs)
         # NOTE: Ram efficiency ~= Isentropic Efficiency
         
     def UpdateInputs(self, **kwargs):
@@ -631,7 +640,8 @@ class Intake(Stage):
 class Compressor(Stage):
     def __init__(self, **kwargs):
         Stage.__init__(self, **kwargs)
-        self.UpdateInputs(**kwargs, StageName = "Compressor")
+        self.StageType = "Compressor"
+        self.UpdateInputs(StageName = "Compressor", StageID="c", **kwargs)
         # Adding PR and BPR
         # self.r = kwargs.get('rc') # Pressure Ratio of stage (pi)
         
@@ -794,7 +804,8 @@ class Compressor(Stage):
 class Combustor(Stage):
     def __init__(self, **kwargs):
         Stage.__init__(self, **kwargs)
-        self.UpdateInputs(**kwargs, StageName = "Combustor")
+        self.StageType = "Combustor"
+        self.UpdateInputs(StageName = "Combustor", StageID="b", **kwargs)
         
     
     def UpdateInputs(self, **kwargs):
@@ -876,7 +887,8 @@ class Combustor(Stage):
 class Turbine(Stage):
     def __init__(self, Comp_to_power, **kwargs):
         Stage.__init__(self, **kwargs)
-        self.UpdateInputs(Comp_to_power, **kwargs, StageName = "Turbine")
+        self.StageType = "Turbine"
+        self.UpdateInputs(Comp_to_power, StageName = "Turbine", StageID='t', **kwargs)
 
 
     def UpdateInputs(self, Comp_to_power, **kwargs):
@@ -951,7 +963,8 @@ class Turbine(Stage):
 class Mixer(Stage):
     def __init__(self, CoreMixStage, BypassMixStage, **kwargs):
         Stage.__init__(self, **kwargs)
-        self.UpdateInputs(CoreMixStage, BypassMixStage, StageName = "Mixer", **kwargs)
+        self.StageType = "Mixer"
+        self.UpdateInputs(CoreMixStage, BypassMixStage, StageName = "Mixer",StageID='M' **kwargs)
 
     def UpdateInputs(self, CoreMixStage, BypassMixStage, **kwargs):
         self.CoreMix = CoreMixStage
@@ -1086,8 +1099,9 @@ class Nozzle(Stage):
         # else:
         #     self.gam = self.gam_a
         #     self.R = self.R
+        self.StageType = "Nozzle"
         self.nozzle_type = nozzle_type # 'C' for Converging, 'CD' for Conv-Div
-        self.UpdateInputs(StageName = "Nozzle", **kwargs)
+        self.UpdateInputs(StageName = "Nozzle",StageID='n', **kwargs)
 
 
     def UpdateInputs(self, **kwargs):
@@ -1142,8 +1156,8 @@ class Nozzle(Stage):
         self.R_e = self.R_i 
         
         # Calculate details if available
-        self.calcDetailProps_i(True)
-        self.calcDetailProps_e(True)
+        self.calcDetailProps_i()
+        self.calcDetailProps_e()
         
    
 
@@ -1151,7 +1165,8 @@ class Duct(Stage):
     def __init__(self, **kwargs): 
         # Adiabatic duct without friction currently
         Stage.__init__(self, **kwargs)
-        self.UpdateInputs(StageName = 'Duct', **kwargs)
+        self.StageType = "Duct"
+        self.UpdateInputs(StageName = 'Duct',StageID='bp', **kwargs)
         
         
     def UpdateInputs(self,**kwargs):
@@ -1170,9 +1185,19 @@ class Duct(Stage):
         self.R_e = self.R_i
         
         # Calculate details if available
-        self.calcDetailProps_i(True)
-        self.calcDetailProps_e(True)
+        self.calcDetailProps_i()
+        self.calcDetailProps_e()
         
         
         
-    
+# =============================================================================
+# Testing Main
+# =============================================================================
+
+if __name__ == "__main__":
+    turb = Compressor() 
+    listTest = [[1, [1,2]], [2, None], [3,None], [4, [1,2,3]]]
+    print(len(listTest[0]))
+    print(type(turb))
+    stageType = str(turb)
+    print(stageType)

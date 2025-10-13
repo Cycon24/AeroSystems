@@ -32,13 +32,27 @@ import numpy as np
 # =============================================================================
 
 class Engine():
+    '''
+    20251012 - Building this to encompase all engines to have inherited functions
+                to reduce repetition and make building new engines easier. Will
+                serve as the framework for developing the engine creator class.
+            -  The tough thing will be enabling the ability to have multiple bypass
+                ducts and handling airflow for the calculation loop in addition to 
+                creating the more generalized engine performance functions.
+            -  In order to make this easier, it may be necessay to only define
+                certain parameters once as some performance values are tied to a 
+                specific component, such as:
+                    TPR: Total Pressure Recovery is tied to a single inlet, so multiple
+                    would make calculation difficult.
+                    
+    '''
     def __init__(self, **kwargs):
         print('bla bla')
         
         self.MAIN_CALCULATION_UPDATED = False 
         
     
-    def calculate(self, printVals=True):
+    def calculate(self, printVals=False):
         '''
         Calculates the properties of the air throughout the engine.
 
@@ -71,7 +85,21 @@ class Engine():
                     self.AllStages[i][0].forward(self.AllStages[i+1][0])
                     
         self.MAIN_CALCULATION_UPDATED = True 
+        
+    def printInputs(self):
+        '''
+        Prints out all of the kwargs entered on intialization
+
+        Returns
+        -------
+        None.
+
+        '''
+        print('Turbofan Engine Inputs')
+        for key,val in self.inputs.items():
+            print('\t {}  =  {}'.format(key,val))
                     
+    
     def engine_performance(self):
         
         # Uninstalled thrust at the moment
@@ -81,8 +109,185 @@ class Engine():
             
         # Pull out types of stages, 
         
+    def gen_CalculatePerformanceParams(self):
+        '''
+        Need to get: 
+        F
+        T
+        F/mdot_0
+        T/mdot_0
+        SFC = f_tot / F/mdot0
+        f
+        f_AB
+        f_0 = f_b / (1+ alpha) + f_ab 
+        eta_T = 1 - 1 / (tau_r*tau_c)
+        eta_P = 2*Minf * (V9/a0 - Minf) / ((V9/a0)^2 - M0^2) 
+        eta_O = T*P
+        TPR
+
+        Returns
+        -------
+        Dict.
+            'F_mdot': Specific Thrust (uninstalled)
+            'T_mdot': Specific Thrust (isntalled)
+            'F'     : Thrust (uninstalled)
+            'T'     : Thrust (installed)
+            'SFC'   : Thrust Specific Fuel Consumption (uninstalled)
+            'TSFC'  : Thrust Specific Fuel Consumption (installed)
+            'f_n'   : Fuel-Air Ratio of Combustor "n" 
+            'f_tot' : FUel-Air Ratio of total engine
+            'eta_T' : Thermal Efficiency
+            'eta_P' : Propulsion Efficiency
+            'eta_O' : Overall Efficiency
+            'TPR_n' : Total Pressure Recovery of Inlet "n"
+        '''
+        # Get lists of each type of stage:
+        Intakes     = self._getStagesOfType("Intake")
+        Compressors = self._getStagesOfType("Compressor")
+        Combustors  = self._getStagesOfType("Combustor")
+        Turbines    = self._getStagesOfType("Turbine")
+        Nozzles     = self._getStagesOfType("Nozzle")
+        Mixers      = self._getStagesOfType("Mixer")
+        Ducts       = self._getStagesOfType("Duct")
+        
+        # Get general props
+        gam_a = self.inputs.get('Gamma_c')
+        Ta = self.inputs.get('Ta')
+        Pa = self.inputs.get('Pa')
+        
+        # from inlet stage (first in list is core inlet)
+        gc = Intakes[0].gc
+        gf = Intakes[0].gf
+        R =  Intakes[0].R_i
+        
+        # Claculate flow velocities
+        Minf = self.inputs.get('Minf')
+        h_PR = self.inputs.get('h_PR')
+        a0 = np.sqrt(gam_a*R*Ta*gc)
+        V0 = Minf*a0
+        
+        # Calculate fuel-air-ratios
+        fs = {}
+        f_tot = 0
+        for comb in Combustors:
+            fs[f'f_{comb.StageID}'] = comb.f
+            
+            f_tot += comb.f*comb.mdot_ratio / (1 + comb.f) if not comb.IS_IDEAL else comb.f*comb.mdot_ratio
+        
+        # Calculate thrust chars
+        F_mdot = 0 
+        D_noz  = 0
+        KE_rat_noz = 0 
+        for noz in Nozzles:
+            F_mdot += (a0/gc)*(noz.mdot_ratio*noz.Ve/a0 - Minf) + noz.Ae_mdota*(noz.Pe - Pa)
+            D_noz  += 0 if noz.Drag == None else noz.Drag 
+            KE_rat_noz  += noz.mdot_ratio*(noz.Ve)**2
+            
+        SFC = 3600*f_tot / F_mdot
+        
+        # Calculate thrust if we have mass flow rate
+        # Get mass flow rate
+        mdot0 = Intakes[0].mdot # May need to update to incorperate more intakes
+        D_inlet = 0
+        TPRs = {}  # Dict of total pressure recoverie
+        for inlet in Intakes: 
+            D_inlet += 0 if inlet.D_additive == None else inlet.D_additive
+            TPRs[f'TPR_{inlet.StageID}'] = inlet.eta_r * inlet.pi * inlet.pi_r
+            # mdot0 += 0 if inlet.mdot == None else inlet.mdot # Add all massflowrate
+        
+        if mdot0 == None:
+            F = None # Uninstalled Thrust
+            T = None # Installed Thrust
+            T_mdot = None # UPDATE (20251012) Can maybe calculate this if inlet/nozzle drag is calculated relative to mdot0
+            TSFC = None 
+        else: 
+            F = F_mdot * mdot0 
+            T = F - D_inlet + D_noz
+            T_mdot = T / mdot0 
+            TSFC = 3600 * f_tot / T_mdot
+            
         
         
+        # Calculate efficies
+        eta_T = 0.5*(KE_rat_noz - V0**2) / (f_tot*h_PR*gf*gc)
+        eta_P = (F_mdot)*V0 / (0.5*gc*KE_rat_noz - V0**2)
+        eta_P_inst = None if T_mdot == None else eta_P * (T_mdot/F_mdot)
+        eta_O = eta_T * eta_P 
+        
+        
+        
+        # STILL INCORRECT FOR SOME REASON
+        # tau_lambda = (self.Turbine.cp_e/self.Compressor.cp_e)*(self.Combustor.Toe/self.inputs['Ta'])
+        # alpha_2 = ((tau_lambda/(self.Inlet.tau_r*self.Fan.tau))*(1+f_b)*(self.Turbine.tau-1) + self.Fan.tau - self.Compressor.tau/self.Fan.tau)/(1-self.Fan.tau)
+        outputs = {
+            'F_mdot': F_mdot,
+            'T_mdot': T_mdot,
+            'F': F,
+            'T': T,
+            'S':SFC,
+            'TSFC': TSFC, 
+            **fs, # unpack combustor f's
+            'f_tot':f_tot,
+            'eta_T':eta_T,
+            'eta_P':eta_P,
+            'eta_O':eta_O,
+            **TPRs
+            }
+       
+        return outputs 
+    
+    def _getStagesOfType(self, stageType: str) -> list: 
+        '''
+        Returns a list of all stages of type stageType
+
+        Parameters
+        ----------
+        stageType : str
+            Must be a string of only one of the following:
+                - "Intake"
+                - "Compressor"
+                - "Combustor"
+                - "Turbine"
+                - "Nozzle"
+                - "Mixer"
+                - "Duct"
+
+        Returns
+        -------
+        list
+            The list of stages of type stageType. Can be empty if no matches found.
+        '''
+        stages = [] 
+        
+        numCoreStages = len(self.AllStages)
+        # Loop through all stages list
+        for i in range(0,numCoreStages):
+            # Loop through items of each row
+            for j in range(0, len(self.AllStages[i])):
+                # Check if its a stage
+                if isinstance(self.AllStages[i][j], SS.Stage):
+                    # It is a stage, check if nmatches stagetype
+                    if str(self.AllStages[i][j]) == stageType:
+                        # Its a match, append it
+                        stages.append(self.AllStages[i][j])
+                    # Dont need to do anything if its not a stage
+                
+                # Check if its a list
+                elif isinstance(self.AllStages[i][j], list):
+                    # It is a list, open it up
+                    for k in range(0, len(self.AllStages[i][j])):
+                        # Check if its a stage
+                        if isinstance(self.AllStages[i][j][k], SS.Stage):
+                            # It is a stage, check if nmatches stagetype
+                            if str(self.AllStages[i][j][k]) == stageType:
+                                # Its a match, append it
+                                stages.append(self.AllStages[i][j][k])
+                        else:
+                            # Not a stage, should be a stage here
+                            raise ValueError('[Error]\t List within all stages contains non-stage objects')
+                
+                # Dont need to do anything if it is not a stage or list
+        return stages 
         
             
 # =============================================================================
@@ -1100,7 +1305,7 @@ class Turbofan_MixedFlow_AfterBurner():
     
     
     
-class Turbojet_Afterburner():
+class Turbojet_Afterburner(Engine):
     def __init__(self, **kwargs):
         '''
         A single spool turbojet engine with diffuser, HPC, burner, HPT,
@@ -1507,3 +1712,14 @@ class Turbojet_Afterburner():
                  stageOuts = self.AllStages[i][1].StageValues()
                  StageProps[self.AllStages[i][1].StageName] = stageOuts
         return StageProps
+    
+    
+# =============================================================================
+#  Main Testing
+# =============================================================================
+if __name__=="__main__":
+    eng = Turbojet_Afterburner()
+    print(eng._getStagesOfType("Nozzle"))
+    # Works
+    
+
