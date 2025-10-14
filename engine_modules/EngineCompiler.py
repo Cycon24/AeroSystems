@@ -44,6 +44,8 @@ class Engine():
                 specific component, such as:
                     TPR: Total Pressure Recovery is tied to a single inlet, so multiple
                     would make calculation difficult.
+    20251014 - Verified changes made reproduce the same values for the performance parameters 
+                so all output equation are correct.
                     
     '''
     def __init__(self, **kwargs):
@@ -150,6 +152,7 @@ class Engine():
         gc = Intakes[0].gc
         gf = Intakes[0].gf
         R =  Intakes[0].R_i
+        gam_a = Intakes[0].gam_i
         
         # Claculate flow velocities
         Minf = self.inputs.get('Minf')
@@ -205,7 +208,7 @@ class Engine():
         
         # Calculate efficies
         eta_T = 0.5*(KE_rat_noz - V0**2) / (f_tot*h_PR*gf*gc)
-        eta_P = (F_mdot)*V0 / (0.5*gc*KE_rat_noz - V0**2)
+        eta_P = (F_mdot)*V0 / (0.5*gc*(KE_rat_noz - V0**2))
         eta_P_inst = None if T_mdot == None else eta_P * (T_mdot/F_mdot)
         eta_O = eta_T * eta_P 
         
@@ -1606,6 +1609,7 @@ class Turbojet_Afterburner(Engine):
             
    
     def CalculatePerformanceParams(self):
+        return self.gen_CalculatePerformanceParams()
         '''
         Need to get: 
         F/mdot_0

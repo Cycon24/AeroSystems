@@ -160,7 +160,7 @@ class Stage():
        
         # Other properties
         self.StageName = self.inputs.get('StageName', "Stage")
-        self.StageIdentifier = self.inputs.get('StageID', "s")
+        self.StageID = self.inputs.get('StageID', "s")
         # self.StageType = "Stage"
         self.Power = None       # W or BTU/s    - Power
         self.SpecPower = None  #  J/kg or BTU/lbm - Specific Power
@@ -374,8 +374,9 @@ class Stage():
             # Calculate area
             mdot_A = GD.mdot(self.Poi, self.Toi, 1, Mach=self.Mi, Gamma=self.gam_i, R=self.R_i, gc=self.gc)
             
-            self.Ai = None if self.mdot == None else self.mdot / mdot_A 
-            self.Ai_mdota = self.mdot_ratio / mdot_A 
+            if abs(mdot_A) > 1e-8:
+                self.Ai = None if self.mdot == None else self.mdot / mdot_A 
+                self.Ai_mdota = self.mdot_ratio / mdot_A 
         
         return None
     
@@ -509,6 +510,7 @@ class Intake(Stage):
         
     def UpdateInputs(self, **kwargs):
         Stage._update_inputs_base(self, **kwargs, )
+        self.AssumeSubsonicExit = self.inputs['AssumeSubsonicExit']
         
         
     def calculate(self):
@@ -519,13 +521,13 @@ class Intake(Stage):
         # Check if gas properties were given to intake
         if self.gam_i == None and self.gam_e == None:
             if self.cp_i == None and self.cp_e == None:
-                raise Warning('Warning: No gas constants inputted to Intake. Assuming Air')
-            else:
+                print('[Warning]\t No gas constants inputted to Intake. Assuming Air')
+        
                 self.gam_i = 1.4  # Gamma value of air
                 self.cp_i = 1.005 if self.units=='SI' else 0.240 # [kJ/kg*K] or [BTU/lbm*R]  cp of air
                 self.R_i = self.gf*self.cp_i*(self.gam_i - 1)/self.gam_i        # [J/kg*K] or [ft*lbf/R*lbm]    R value of Air
                 
-        
+        print(f"{self.gf}, {self.cp_i}, {self.gam_i}")
         self.R_i = self.gf*self.cp_i*(self.gam_i - 1)/self.gam_i        # [J/kg*K] or [ft*lbf/R*lbm]    R value of Air
     
         # Run external conditions
@@ -964,7 +966,7 @@ class Mixer(Stage):
     def __init__(self, CoreMixStage, BypassMixStage, **kwargs):
         Stage.__init__(self, **kwargs)
         self.StageType = "Mixer"
-        self.UpdateInputs(CoreMixStage, BypassMixStage, StageName = "Mixer",StageID='M' **kwargs)
+        self.UpdateInputs(CoreMixStage, BypassMixStage, StageName = "Mixer",StageID='M', **kwargs)
 
     def UpdateInputs(self, CoreMixStage, BypassMixStage, **kwargs):
         self.CoreMix = CoreMixStage
@@ -1154,6 +1156,10 @@ class Nozzle(Stage):
         self.gam_e = self.gam_i 
         self.cp_e = self.cp_i 
         self.R_e = self.R_i 
+        
+        # Calculate Nozzle Drag
+        self.Drag = None
+        
         
         # Calculate details if available
         self.calcDetailProps_i()
