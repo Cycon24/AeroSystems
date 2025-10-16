@@ -215,6 +215,9 @@ class Stage():
         core_Stage.cp_i = self.cp_e 
         core_Stage.R_i = self.R_e 
         
+        if not isinstance(bypass_Stages,list):
+            bypass_Stages = [bypass_Stages]
+        
         # Check if theres bypass stages
         if bypass_Stages[0] == None:
             # No bypass, pass as regular
@@ -468,11 +471,20 @@ class Stage():
             'Ae': self.Ae,
             "Ae_mdota": self.Ae_mdota
             }
+        BPRs = {}
+        if isinstance(self.BPR, list):
+            if len(self.BPR) == 1:
+                BPRs["BPR"] = self.BPR[0]
+            else:
+                for i, alpha in enumerate(self.BPR):
+                    BPRs[f"BPR_{i+1}"] = alpha
+        else:
+            BPRs = {'BPR': self.BPR}
             
         performance = {
             'mdot': self.mdot,
             'mdot_ratio': self.mdot_ratio,
-            'BPR': self.BPR,
+            **BPRs,
             'Power':self.Power,
             'SpecPower': None if not hasattr(self,'specPower') else self.specPower,
             'ni':self.ni,
@@ -480,7 +492,6 @@ class Stage():
             'pi': self.pi,
             'tau': self.tau,
             'f':None if not hasattr(self,'f') else self.f,
-            'BPR': self.BPR
             }
         
         stageVals = {
@@ -527,7 +538,7 @@ class Intake(Stage):
                 self.cp_i = 1.005 if self.units=='SI' else 0.240 # [kJ/kg*K] or [BTU/lbm*R]  cp of air
                 self.R_i = self.gf*self.cp_i*(self.gam_i - 1)/self.gam_i        # [J/kg*K] or [ft*lbf/R*lbm]    R value of Air
                 
-        print(f"{self.gf}, {self.cp_i}, {self.gam_i}")
+        # print(f"{self.gf}, {self.cp_i}, {self.gam_i}")
         self.R_i = self.gf*self.cp_i*(self.gam_i - 1)/self.gam_i        # [J/kg*K] or [ft*lbf/R*lbm]    R value of Air
     
         # Run external conditions
@@ -574,11 +585,11 @@ class Intake(Stage):
         self.calcDetailProps_i()
         
         # Find outlet stag props
-        self.Toe = self.Toi # Adiabatic
+        self.tau = 1 if self.tau == None else self.tau
+        self.Toe = self.Toi * self.tau # Typically Adiabatic (tau =1)
         self.Poe = self.pi * self.Poi # Using only pi_dmax because it is the pressure loss within diffuser. 
                                       # Poi already contains pressure losses from external phenomena
         
-        self.tau = self.Toe/self.Toi
         
         self.gam_e = self.gam_i 
         self.cp_e = self.cp_i 
@@ -650,7 +661,7 @@ class Compressor(Stage):
    
     def UpdateInputs(self, **kwargs):
         Stage._update_inputs_base(self, **kwargs)
-        self.BPR = self.inputs.get('BPR', 1) # Bypass Ratio (α): bypass mass flow (air)/mass flow through core (air)
+        self.BPR = self.inputs.get('BPR', None) # Bypass Ratio (α): bypass mass flow (air)/mass flow through core (air)
         self.np = self.inputs.get('np') # Polytropic efficiency
         self.mdot_ratio = 1 # Starts as 1 for fan, will be updated by prior comp if
                             # different from 1 from forward section
