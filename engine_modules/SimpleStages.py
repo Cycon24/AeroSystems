@@ -828,7 +828,7 @@ class Combustor(Stage):
         # self.dPo = kwargs.get('dPb_dec', 0) # the pressure loss within the compressor as a decimal (0.05 = 5% loss)
         self.f  = self.inputs.get('f') # actual/real fuel-air-ratio 
         self.Q  = self.inputs.get('Q_fuel')
-        self.ni = self.inputs.get('nb', 1) # Combustor efficiency
+        # self.ni = self.inputs.get('nb', 1) # Combustor efficiency
         # self.IS_IDEAL = self.inputs.get('IS_IDEAL') # Shouldnt need? Defined in stage
                 
     def calculate(self):
@@ -842,7 +842,7 @@ class Combustor(Stage):
                 self.R_e = self.R_i 
                 self.cp_e = self.cp_i 
                 self.gam_e = self.gam_i 
-                print("Warning: Combustor gas exit properties set to inputs.")
+                print("[Warning]\t Combustor gas exit properties set to inputs.")
         
         if self.Toe == None: 
             # No Turbine inlet temp given

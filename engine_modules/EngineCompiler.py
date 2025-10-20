@@ -24,6 +24,7 @@ To-Do List:
 
 import engine_modules.EnginePerformanceFunctions as EPF
 import engine_modules.SimpleStages as SS
+import _tools.writeDictTable as wDict 
 import numpy as np
 
 
@@ -49,7 +50,6 @@ class Engine():
                     
     '''
     def __init__(self, **kwargs):
-        print('bla bla')
         
         self.MAIN_CALCULATION_UPDATED = False 
         
@@ -122,6 +122,7 @@ class Engine():
         Mixers      = self._getStagesOfType("Mixer")
         Ducts       = self._getStagesOfType("Duct")
         
+        
         # Get general props
         gam_a = self.inputs.get('Gamma_c')
         Ta = self.inputs.get('Ta')
@@ -160,7 +161,7 @@ class Engine():
             KE_rat_noz  += noz.mdot_ratio*(noz.Ve)**2
           
         F_mdot = (a0/gc)*(noz_mom_sum - Minf) + noz_pres_sum 
-        SFC = 3600*f_tot / F_mdot
+        SFC = f_tot / F_mdot 
         
         # Calculate thrust if we have mass flow rate
         # Get mass flow rate
@@ -181,8 +182,15 @@ class Engine():
             F = F_mdot * mdot0 
             T = F - D_inlet + D_noz
             T_mdot = T / mdot0 
-            TSFC = 3600 * f_tot / T_mdot
+            TSFC = f_tot / T_mdot
             
+        # Recalc SFC for units
+        if self.inputs["Units"] == "SI":
+            SFC *= 1e6 # go from kg/n*s * (1000g/1kg) * (1000 N / 1 kN)
+            TSFC *= 1e6 
+        else:
+            SFC *= 3600 # go from lbm/lbf*s * (3600s/1hr)
+            TSFC *= 3600
         
         
         # Calculate efficies
@@ -213,7 +221,7 @@ class Engine():
        
         return outputs
     
-    def runParameterSweep(self, paramKey, paramList, perfFunctions=None, printVals=False):
+    def runParameterSweep(self, paramKey, paramList, perfFunctions=None, printVals=False) -> dict:
         # Setup the output dictionary
         # Needs to contain an item for each perfFunction
         # Then the values within each perfFunction needs to be lists. 
@@ -309,11 +317,94 @@ class Engine():
                 
         return None
     
+    def writePerformanceToFile(self, performanceOutput: dict, filepath: str = "performance.txt") -> None:
+        # utilize writeDictTable to write the data to a table, this function acts like a wrapper
+        # to ensure that the formatting is correct since the performance output can be any length
+        # and to include correct units
+        fmts = {
+            # Possible variable params
+            "Tt4": ".0f",
+            "Tt7": ".0f",
+            "Minf": "0.3f",
+            
+            # Thrust
+            "F_mdot": ".2f",
+            "T_mdot": ".2f",
+            "T": ".2f",
+            "F": ".2f",
+            "S": ".5f",
+            "TSFC": ".5f",
+            # "f_tot": ".5f", # Should be handled later
+            "Me": ".3f", 
+            "Ve": ".2f",
+            
+            # Efficiencies
+            "eta_T": ".2f", 
+            "eta_P": ".2f", 
+            "eta_O": ".2f",
+            
+            # Multiple Stage params (TPR_n and f_n handled later)
+        }
+        
+        perfunits = self.getPerformanceUnits()
+        
+        units_map = {
+            # Possible variable params
+            "Tt4": self.AllStages[0][0].units_labels["T"],
+            "Tt7": self.AllStages[0][0].units_labels["T"],
+            
+            "F_mdot": perfunits["F_mdot"],  
+            "T_mdot": perfunits["F_mdot"],
+            "F": perfunits["F"],
+            "T": perfunits["F"],
+            "S": perfunits["SFC"],
+            "TSFC": perfunits["SFC"],
+            "f_tot": "", # Dont need to repeat for other f's
+            "eta_T": "%",
+            "eta_P": "%",
+            "eta_O": "%",
+            "TPR": "",
+            "Me": "",
+            "Ve": self.AllStages[0][0].units_labels["V"],
+        }
+        
+        # Update all efficiencies mult by 100 to convert to percentage
+        for key, val in performanceOutput.items():
+            # First check if its a list, if it isnt, make it one
+            if not (isinstance(val, list) or isinstance(val, np.ndarray)):
+                performanceOutput[key] = [val]
+            
+            # Value shaping
+            if key.startswith("eta"):
+                #I ts a list, iterate through and multiple all by 100
+                for i, v in enumerate(performanceOutput[key]):
+                    if v != None:
+                        performanceOutput[key][i] = v*100 
+
+            # Formatting        
+            if key.startswith("f_"):
+                fmts[key] = ".5f"
+            if key.startswith("TPR"):
+                fmts[key] = ".4f", 
+  
+                    
+
+        wDict.write_dict_table(
+            performanceOutput,
+            file_path=filepath,
+            formats=fmts,
+            spacing=4,
+            units=units_map,
+            units_style="brackets",  # or "plain"
+        )
+        
+        return None
+    
     def getPerformanceUnits(self) -> dict:
         units = {
             "F_mdot": 'N*s\kg' if self.inputs["Units"] == "SI" else "lbf*s/lbm",
             "F": 'N' if self.inputs["Units"] == "SI" else "lbf",
-            "SFC": "kg/N*hr" if self.inputs["Units"] == "SI" else "lbm/lbf*hr"}
+            "SFC": "g/kN*s" if self.inputs["Units"] == "SI" else "lbm/lbf*hr"}
         return units
     
     def getStageStagnationVals(self) -> dict:
@@ -497,7 +588,7 @@ class Engine():
                 
         return funcOuts
     
-    
+
         
             
 # =============================================================================
@@ -1274,7 +1365,7 @@ class Turbojet_Afterburner(Engine):
         
         if ON_INITIATION:
             # Define each stage and pass in parameters
-            self.Inlet     = SS.Intake(**self.gen_kwargs, m_dot=mdot, pi=pi_d, cp_i=cp_air, Gamma_i=gam_air)
+            self.Inlet     = SS.Intake(**self.gen_kwargs, mdot=mdot, pi=pi_d, cp_i=cp_air, Gamma_i=gam_air)
             self.Compressor   = SS.Compressor(**self.gen_kwargs, pi=pi_c, ni=eta_c,np=npc, pi_overall=pi_overall)
             self.Combustor = SS.Combustor(**self.gen_kwargs, Toe=To_ti, pi=pi_b, ni=eta_b, cp_e=cp_b, Gamma_e=gam_b)
             self.Turbine   = SS.Turbine(self.Compressor, **self.gen_kwargs, nm=eta_m, ni=eta_t, np=npt)
@@ -1282,7 +1373,7 @@ class Turbojet_Afterburner(Engine):
             self.Nozzle    = SS.Nozzle(air_type='hot',nozzle_type='CD',**self.gen_kwargs, pi=pi_n) 
             
             # Set names for easier readout checks
-            self.Afterburner.StageName = 'Afterburner'
+            self.Afterburner.UpdateInputs(StageName = 'Afterburner', StageID="ab")
             
             # Set other conditions
             self.Combustor.Toe = To_ti # Set combustor outlet temperature 
