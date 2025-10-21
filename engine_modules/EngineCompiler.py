@@ -187,10 +187,10 @@ class Engine():
         # Recalc SFC for units
         if self.inputs["Units"] == "SI":
             SFC *= 1e6 # go from kg/n*s * (1000g/1kg) * (1000 N / 1 kN)
-            TSFC *= 1e6 
+            if TSFC != None: TSFC *= 1e6 
         else:
             SFC *= 3600 # go from lbm/lbf*s * (3600s/1hr)
-            TSFC *= 3600
+            if TSFC != None: TSFC *= 3600
         
         
         # Calculate efficies
@@ -1332,6 +1332,7 @@ class Turbojet_Afterburner(Engine):
         
         pi_n  = self.inputs.get('pi_n') # Nozzle total pressure ratio
         pi_AB = self.inputs.get('pi_ab') # Afterburner total ressure raito
+        pi_AB_off = self.inputs.get('pi_ab_off', pi_AB) # AB total pressure ratio without operation
         
         # Turbine Inlet / Combustor Outlet
         To_ti = self.inputs.get('Tt4') # K - Turbine inlet temp
@@ -1369,7 +1370,7 @@ class Turbojet_Afterburner(Engine):
             self.Compressor   = SS.Compressor(**self.gen_kwargs, pi=pi_c, ni=eta_c,np=npc, pi_overall=pi_overall)
             self.Combustor = SS.Combustor(**self.gen_kwargs, Toe=To_ti, pi=pi_b, ni=eta_b, cp_e=cp_b, Gamma_e=gam_b)
             self.Turbine   = SS.Turbine(self.Compressor, **self.gen_kwargs, nm=eta_m, ni=eta_t, np=npt)
-            self.Afterburner = SS.Combustor(**self.gen_kwargs, pi=pi_AB, ni=eta_ab, dTb=dTo_ab, cp_e=cp_ab, Gamma_e=gam_ab)
+            self.Afterburner = SS.Combustor(**self.gen_kwargs, pi=pi_AB, pi_off=pi_AB_off, ni=eta_ab, dTb=dTo_ab, cp_e=cp_ab, Gamma_e=gam_ab)
             self.Nozzle    = SS.Nozzle(air_type='hot',nozzle_type='CD',**self.gen_kwargs, pi=pi_n) 
             
             # Set names for easier readout checks

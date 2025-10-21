@@ -828,6 +828,7 @@ class Combustor(Stage):
         # self.dPo = kwargs.get('dPb_dec', 0) # the pressure loss within the compressor as a decimal (0.05 = 5% loss)
         self.f  = self.inputs.get('f') # actual/real fuel-air-ratio 
         self.Q  = self.inputs.get('Q_fuel')
+        self.pi_off = self.inputs.get('pi_off', None)
         # self.ni = self.inputs.get('nb', 1) # Combustor efficiency
         # self.IS_IDEAL = self.inputs.get('IS_IDEAL') # Shouldnt need? Defined in stage
                 
@@ -860,8 +861,14 @@ class Combustor(Stage):
                 self.Toe = self.Toi + self.dTo
                  
          # Now we have exit temperature   
-        self.pi = 1 if self.pi == None else self.pi 
         self.tau = self.Toe / self.Toi
+        
+        # Check if combustor is on/off (tau!=1)
+        if abs(1-self.tau) < 1e-6:
+            # burner is off 
+            self.pi = 1 if self.pi == None else self.pi 
+            self.pi = self.pi_off if self.pi_off != None else self.pi
+        
         self.Poe = self.Poi*self.pi 
         self.dTo = self.Toe - self.Toi # will use later for f calcs
         
