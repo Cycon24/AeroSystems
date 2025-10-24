@@ -541,17 +541,20 @@ class Intake(Stage):
         # print(f"{self.gf}, {self.cp_i}, {self.gam_i}")
         self.R_i = self.gf*self.cp_i*(self.gam_i - 1)/self.gam_i        # [J/kg*K] or [ft*lbf/R*lbm]    R value of Air
     
+        # Ram Affects
+        self.tau_r = 1 + (self.Minf**2)*(self.gam_i - 1)/2       # Totoal/static (Tt0/T0)
+        self.pi_r  = self.tau_r**(self.gam_i / (self.gam_i - 1)) # Total/Static  (Pt0/P0)
+        Pt0 = self.Pa*self.pi_r 
+        Tt0 = self.Ta*self.tau_r
         # Run external conditions
-        external = self.external_conditions(self.Minf)
+        external = self.external_conditions(self.Minf, P0=self.Pa, T0=self.Ta, mdot=self.mdot)
         self.D_additive = external.get('D_add', None)
         self.mdot = external.get('mdot', self.mdot)
         self.Mi = external.get('M1', self.Mi)
         self.A0 = external.get('A0', None)
-        
-        # Ram Affects
         self.eta_r = external['eta_r'] # Pt1/Pt0 
-        self.tau_r = 1 + (self.Minf**2)*(self.gam_i - 1)/2       # Totoal/static (Tt0/T0)
-        self.pi_r  = self.tau_r**(self.gam_i / (self.gam_i - 1)) # Total/Static  (Pt0/P0)
+        
+        
         # print('RAM: \n\t eta {:.4f}\n\t tau {:.4f}\n\t pi {:.4f}'.format(self.eta_r, self.tau_r,self.pi_r))
         # NOTE: tau_r and pi_r are the only ratios that are
         # static and stagnation ratios
@@ -599,7 +602,7 @@ class Intake(Stage):
         self.calcDetailProps_e(self.AssumeSubsonicExit) # Assume subsonic at diffuser exit?
         
         
-    def external_conditions(self, Minf):
+    def external_conditions(self, Minf, **kwargs):
         '''
         Calculates the Ram Efficiency eta_r from the Mach number since
         the equation used will vary depending on freestream Mach. Using
