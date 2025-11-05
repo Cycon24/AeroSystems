@@ -911,14 +911,15 @@ class Turbine(Stage):
     def __init__(self, Comp_to_power, **kwargs):
         Stage.__init__(self, **kwargs)
         self.StageType = "Turbine"
-        self.UpdateInputs(Comp_to_power, StageName = "Turbine", StageID='t', **kwargs)
+        self.Compressor = Comp_to_power
+        self.UpdateInputs(StageName = "Turbine", StageID='t', **kwargs)
 
 
-    def UpdateInputs(self, Comp_to_power, **kwargs):
+    def UpdateInputs(self, **kwargs):
         self._update_inputs_base(**kwargs) 
         self.np = self.inputs.get('np') # Polytropic efficiency
         self.nm = self.inputs.get('nm',1) # Mechanical efficiency
-        self.Compressor = Comp_to_power # Could be list
+         # Could be list
         # Will have inlet temp, compressor power
         #self.r  = kwargs.get('rt') # Add for later, not used now
         # this will be for generators or when turbine pressure ratio is specified

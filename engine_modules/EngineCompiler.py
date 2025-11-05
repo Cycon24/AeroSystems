@@ -1396,7 +1396,7 @@ class Turbojet_Afterburner(Engine):
              self.Inlet      .UpdateInputs(**self.gen_kwargs, m_dot=mdot, pi=pi_d)
              self.Compressor .UpdateInputs(**self.gen_kwargs, pi=pi_c, np=npc,pi_overall=pi_overall)
              self.Combustor  .UpdateInputs(**self.gen_kwargs, Toe=To_ti, pi=pi_b, ni=eta_b)
-             self.Turbine    .UpdateInputs(self.Compressor, **self.gen_kwargs, nm=eta_m, np=npt)
+             self.Turbine    .UpdateInputs(**self.gen_kwargs, nm=eta_m, np=npt)
              self.Afterburner.UpdateInputs(**self.gen_kwargs, pi=pi_AB, ni=eta_ab)
              self.Nozzle     .UpdateInputs(**self.gen_kwargs, pi=pi_n) 
              
