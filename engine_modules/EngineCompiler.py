@@ -26,6 +26,10 @@ import engine_modules.EnginePerformanceFunctions as EPF
 import engine_modules.SimpleStages as SS
 import _tools.writeDictTable as wDict 
 import numpy as np
+import os
+from pathlib import Path
+from datetime import datetime
+from typing import Any, Mapping, Sequence, Optional, List, Dict
 
 
 # =============================================================================
@@ -169,7 +173,9 @@ class Engine():
         D_inlet = 0
         TPRs = {}  # Dict of total pressure recoverie
         for inlet in Intakes: 
+            # Add additive drag and nacelle drag
             D_inlet += 0 if inlet.D_additive == None else inlet.D_additive
+            D_inlet += 0 if inlet.D_nacelle == None else inlet.D_nacelle
             TPRs[f'TPR_{inlet.StageID}'] = inlet.eta_r * inlet.pi * inlet.pi_r
             # mdot0 += 0 if inlet.mdot == None else inlet.mdot # Add all massflowrate
         
@@ -180,7 +186,7 @@ class Engine():
             TSFC = None 
         else: 
             F = F_mdot * mdot0 
-            T = F - D_inlet + D_noz
+            T = F - D_inlet - D_noz
             T_mdot = T / mdot0 
             TSFC = f_tot / T_mdot
             
@@ -398,6 +404,214 @@ class Engine():
             units_style="brackets",  # or "plain"
         )
         
+        return None
+    
+    def writeStagesToFile(self,
+        stages: Mapping[str, Mapping[str, Any]],
+        base_dir: str | os.PathLike,
+        sweepArray: Sequence[Any],
+        sweepKey: str,
+        runtag: Optional[str] = None,
+        sort_headers: bool = False,
+        spacing: int = 4,
+    ) -> None:
+        """
+        Create base_dir/runtag/, then one <StageName>.txt per stage.
+        Each file contains 'inputs', 'outputs', 'performance' tables, separated by two blank lines.
+        - Uses provided write_dict_table.
+        - Prepends sweep column (sweepKey) with sweepArray values.
+        - Converts Pi,Poi,Pe,Poe from Pa->kPa and sets units to kPa.
+        - Header sorting optional (sweep first).
+        - Returns None.
+        """
+        # --- runtag ---
+        if runtag is None:
+            runtag = datetime.now().strftime("%Y%m%d_%H%M%S")
+    
+        root = Path(base_dir) / runtag
+        root.mkdir(parents=True, exist_ok=True)
+    
+        # --- normalize sweep ---
+        def _to_list(v: Any) -> List[Any]:
+            if isinstance(v, np.ndarray):
+                return v.tolist()
+            if isinstance(v, (list, tuple)):
+                return list(v)
+            return [v]
+    
+        sweep_list = _to_list(sweepArray)
+        n = len(sweep_list)
+    
+        # --- static formats (match style of writePerformanceToFile; extend with stage params) ---
+        fmts: Dict[str, str] = {
+            # Generic
+            sweepKey: ".6g",
+    
+            # Flow state (inputs/outputs)
+            "Vi": ".2f", "Ve": ".2f",
+            "Mi": ".3f", "Me": ".3f",
+            "Ti": ".3f", "Te": ".3f",
+            "Toi": ".3f", "Toe": ".3f",
+            "Pi": ".3f", "Pe": ".3f",
+            "Poi": ".3f", "Poe": ".3f",
+            "gam_i": ".3f", "gam_e": ".3f",
+            "cp_i": ".4f", "cp_e": ".4f",
+            "R_i": ".2f", "R_e": ".2f",
+            "Ai": ".5f", "Ae": ".5f",
+            "Ai_mdota": ".5f", "Ae_mdota": ".5f",
+    
+            # Performance & extras
+            "mdot": ".3f", "mdot_ratio": ".4f", "BPR": ".4f",
+            "Power": ".2f", "SpecPower": ".3f",
+            "ni": ".3f", "np": ".3f",
+            "pi": ".4f", "tau": ".4f",
+            "f": ".5f", "f_tot": ".5f",
+            "tau_r": ".4f", "pi_r": ".4f", "eta_r": ".2f",
+            "pi_d": ".4f", "pi_max": ".4f", "pi_overall": ".4f",
+            "A0": ".6f", "dTo": ".2f",
+            "D_add": ".2f", "D_nac": ".2f", "D_noz": ".2f",
+            "C_V": ".4f", "C_A": ".4f", "C_D": ".4f", "C_fg": ".4f",
+            "Fg_ideal": ".2f",
+            "Fg_ideal/mdot0": ".4f",
+            "D_noz/mdot0": ".4f",
+            # Keep room for any stray columns: write_dict_table will use default for others
+        }
+    
+        # --- for each stage ---
+        for stage_name, stage in stages.items():
+            units_base: Mapping[str, str] = stage.get("Units", {})
+            stage_path = root / f"{stage_name}.txt"
+    
+            # Build static units map (per column key) once per stage using stage Units
+            # Pressure keys will be overridden to kPa below.
+            units_map_base: Dict[str, str] = {
+                # Flow state
+                "Vi": units_base.get("V", ""), "Ve": units_base.get("V", ""),
+                "Mi": "", "Me": "",
+                "Ti": units_base.get("T", ""), "Te": units_base.get("T", ""),
+                "Toi": units_base.get("T", ""), "Toe": units_base.get("T", ""),
+                "Pi": units_base.get("P", ""), "Pe": units_base.get("P", ""),
+                "Poi": units_base.get("P", ""), "Poe": units_base.get("P", ""),
+                "gam_i": "", "gam_e": "",
+                "cp_i": units_base.get("Cp", ""), "cp_e": units_base.get("Cp", ""),
+                "R_i": units_base.get("R", ""), "R_e": units_base.get("R", ""),
+                "Ai": units_base.get("A", ""), "Ae": units_base.get("A", ""),
+                "Ai_mdota": units_base.get("A", "")+"*s/kg", "Ae_mdota": units_base.get("A", "")+"*s/kg",
+    
+                # Performance & extras
+                "mdot": units_base.get("mdot", ""),
+                "mdot_ratio": "",
+                "BPR": "",
+                "Power": units_base.get("Pow", ""),
+                "SpecPower": units_base.get("Sp_P", ""),
+                "ni": "", "np": "",         # keep as fraction (not %), per your data keys
+                "pi": "", "tau": "",
+                "f": "",
+                "tau_r": "", "pi_r": "", "eta_r": "%",
+                "pi_d": "", "pi_max": "", "pi_overall": "",
+                "A0": units_base.get("A", ""),
+                "dTo": units_base.get("T", ""),
+                "D_add": "N",  # treat as power-like unless you prefer N
+                "D_nac":"N",
+                "D_noz": "N",
+                "C_V": "", "C_A": "", "C_D": "", "C_fg": "",
+                "Fg_ideal": "N",             # force unit unknown in stage Units; leave empty
+                "Fg_ideal/mdot0": "N*s/kg", "D_noz/mdot0": "N*s/kg",
+            }
+    
+            # Enforce pressure units to kPa for the four keys when present
+            for pk in ("Pi", "Poi", "Pe", "Poe"):
+                if pk in units_map_base:
+                    units_map_base[pk] = "kPa"
+    
+            # Write sections in fixed order if present
+            for section_key in ("inputs", "outputs", "performance"):
+                if section_key not in stage:
+                    continue
+    
+                raw_section = stage[section_key]
+    
+                # Convert values to lists and validate lengths
+                section_data: Dict[str, List[Any]] = {}
+                for k, v in raw_section.items():
+                    if isinstance(v, np.ndarray):
+                        section_data[k] = v.tolist()
+                    elif isinstance(v, (list, tuple)):
+                        section_data[k] = list(v)
+                    else:
+                        section_data[k] = [v]
+                    if len(section_data[k]) != n:
+                        raise ValueError(
+                            f"Length mismatch @ stage='{stage_name}', section='{section_key}', column='{k}': "
+                            f"{len(section_data[k])} != {n} (len(sweepArray))"
+                        )
+    
+                # Convert pressures Pa -> kPa for inputs/outputs
+                if section_key in ("inputs", "outputs"):
+                    for pk in ("Pi", "Poi", "Pe", "Poe"):
+                        if pk in section_data:
+                            converted = []
+                            for val in section_data[pk]:
+                                if val is None:
+                                    converted.append(None)
+                                else:
+                                    try:
+                                        fv = float(val)
+                                        converted.append(fv / 1000.0)
+                                    except Exception:
+                                        converted.append(val)
+                            section_data[pk] = converted
+    
+                # Prepare the table payload with sweep as the first column
+                table: Dict[str, List[Any]] = {sweepKey: list(sweep_list)}
+                table.update(section_data)
+    
+                # Column order: sweep first, then original or alpha-sorted
+                remaining_cols = [c for c in section_data.keys()]
+                if sort_headers:
+                    remaining_cols = sorted(remaining_cols, key=str.lower)
+                column_order = [sweepKey] + remaining_cols
+    
+                # Units map for this table (sweep has no unit)
+                units_map = {sweepKey: ""}
+                for col in section_data.keys():
+                    units_map[col] = units_map_base.get(col, "")
+    
+                # Formats for this table: use fmts where provided; write_dict_table will fallback otherwise
+                formats = {k: v for k, v in fmts.items() if k in table}
+    
+                # Write: first section overwrites/create; next sections append with two blank lines
+                if not stage_path.exists():
+                    wDict.write_dict_table(
+                        table,
+                        file_path=stage_path,
+                        column_order=column_order,
+                        formats=formats,
+                        spacing=spacing,
+                        units=units_map,
+                        units_style="brackets",
+                    )
+                else:
+                    tmp = stage_path.with_suffix(".tmp_append")
+                    wDict.write_dict_table(
+                        table,
+                        file_path=tmp,
+                        column_order=column_order,
+                        formats=formats,
+                        spacing=spacing,
+                        units=units_map,
+                        units_style="brackets",
+                    )
+                    with open(tmp, "r", encoding="utf-8") as r:
+                        content = r.read()
+                    with open(stage_path, "a", encoding="utf-8") as w:
+                        w.write("\n\n")
+                        w.write(content)
+                    try:
+                        os.remove(tmp)
+                    except OSError:
+                        pass
+    
         return None
     
     def getPerformanceUnits(self) -> dict:

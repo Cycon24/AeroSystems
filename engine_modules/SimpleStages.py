@@ -546,9 +546,11 @@ class Intake(Stage):
         self.pi_r  = self.tau_r**(self.gam_i / (self.gam_i - 1)) # Total/Static  (Pt0/P0)
         Pt0 = self.Pa*self.pi_r 
         Tt0 = self.Ta*self.tau_r
+        self.pi = 1 if self.pi == None else self.pi # Pt2/Pt1
         # Run external conditions
-        external = self.external_conditions(self.Minf, P0=self.Pa, T0=self.Ta, mdot=self.mdot)
+        external = self.external_conditions(self.Minf, P0=self.Pa, T0=self.Ta, mdot=self.mdot, pi_dmax=self.pi)
         self.D_additive = external.get('D_add', None)
+        self.D_nacelle = external.get("D_nac", None)
         self.mdot = external.get('mdot', self.mdot)
         self.Mi = external.get('M1', self.Mi)
         self.A0 = external.get('A0', None)
@@ -560,7 +562,6 @@ class Intake(Stage):
         # static and stagnation ratios
         
         # Correct the diffusor pressure ratio
-        self.pi = 1 if self.pi == None else self.pi # Pt2/Pt1
         self.pi_d = self.pi * self.eta_r # total pressure loss from freestream to diffuser exit: Pt2/Pt0
         
         
@@ -647,7 +648,7 @@ class Intake(Stage):
         outs['performance']['pi_max'] = self.pi
         outs['performance']['A0'] = self.A0
         outs['performance']['D_add'] = self.D_additive
-        
+        outs['performance']['D_nac'] = self.D_nacelle
         return outs
         
 # =============================================================================
@@ -1130,6 +1131,8 @@ class Nozzle(Stage):
 
     def UpdateInputs(self, **kwargs):
         self._update_inputs_base(**kwargs) 
+        self.CA = self.inputs.get("CA", None) 
+        self.CD = self.inputs.get("CD", None)
         
     def calculate(self):
         # Check if choked
@@ -1179,13 +1182,40 @@ class Nozzle(Stage):
         self.cp_e = self.cp_i 
         self.R_e = self.R_i 
         
-        # Calculate Nozzle Drag
-        self.Drag = None
-        
         
         # Calculate details if available
         self.calcDetailProps_i()
         self.calcDetailProps_e()
+        
+        # Calculate Nozzle Drag
+        if self.ni != None:
+            self.CV = np.sqrt(self.ni)
+        else:
+            self.CV = 1
+        self.CA = 1 if self.CA == None else self.CA
+        self.CD = 1 if self.CD == None else self.CD
+        self.Cfg = self.CD*self.CV*np.sqrt((1 - ((self.Pe/self.Pa)/(self.NPR*self.CD**2))**((self.gam_e-1)/self.gam_e))/(1-self.NPR**(-(self.gam_e-1)/self.gam_e))) * \
+            (self.CA + (((self.gam_e - 1)/(2*self.gam_e))*(1 - self.Pa/self.Pe))/((self.pi*self.NPR*self.Pa/self.Pe)**((self.gam_e-1)/self.gam_e) -1))
+        if self.mdot != 0:
+            self.Fg_ideal = self.mdot*self.Ve + self.Ae*(self.Pe - self.Pa)
+            self.Drag = self.Fg_ideal*(1-self.Cfg)
+    
+        self.Fg_ideal_mdota = self.mdot_ratio *self.Ve + self.Ae_mdota *(self.Pe - self.Pa)
+        self.Drag_mdota = self.Fg_ideal_mdota*(1-self.Cfg)
+        
+    def StageValues(self):
+        outs = Stage.StageValues(self)
+        outs['performance']['C_V'] = self.CV
+        outs['performance']['C_A'] = self.CA
+        outs['performance']['C_D'] = self.CD
+        outs['performance']['C_fg'] = self.Cfg
+        outs['performance']['Fg_ideal'] = self.Fg_ideal
+        outs['performance']['D_noz'] = self.Drag
+        outs['performance']['Fg_ideal/mdot0'] = self.Fg_ideal_mdota
+        outs['performance']['D_noz/mdot0'] = self.Drag_mdota
+        
+        return outs
+        
         
    
 
