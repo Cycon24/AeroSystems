@@ -10,7 +10,7 @@ class Atmosphere():
     # Selft initialization
     def __init__(self):
         # Create all atmosphereic properties
-        Altitude = np.arange(0,65000,1000)
+        Altitude = np.arange(0, 91000,1000) # ft
         
         g = 32.1740484 # ft/s2
         NM = 6076.4   # 1 Nautical Mile = ft
@@ -50,11 +50,16 @@ class Atmosphere():
                 self.TR[i] = self.Temp_R[i] / T_SL_R
                 self.PR[i] = self.TR[i]**5.2562
 
-            else:
+            elif h < 82345:
                 self.Temp_R[i] = 389.99
                 
                 self.TR[i] = 0.7519
                 self.PR[i] = 0.223361 * math.exp((-0.0481/1000)*(h-36089))
+            else:
+                self.Temp_R[i] = (- 205.05 + 0.00164*h) + 459.67
+                
+                self.TR[i] = self.Temp_R[i] / T_SL_R
+                self.PR[i] = (51.97/2116) * self.TR[i]**(-11.388)
                 
             self.DR[i] = self.PR[i] / self.TR[i]
             self.a[i] = a_SL*np.sqrt(self.TR[i])
