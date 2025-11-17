@@ -1148,7 +1148,9 @@ class Nozzle(Stage):
                 self.Pe = Pc # For Converging nozzle
             else:
                 # CD Nozzle
-                self.Pe = self.Pa 
+                if self.Pe == None: 
+                    # No Value provided
+                    self.Pe = self.Pa 
                 # is because Pe = Pa for a fully expanded CD Nozzle
                 # This part may not be correct 
                 # self.Te = self.Toi*(1-self.ni*(1-(self.Pe/self.Poi)**((self.gam-1)/self.gam)))
@@ -1196,9 +1198,12 @@ class Nozzle(Stage):
         self.CD = 1 if self.CD == None else self.CD
         self.Cfg = self.CD*self.CV*np.sqrt((1 - ((self.Pe/self.Pa)/(self.NPR*self.CD**2))**((self.gam_e-1)/self.gam_e))/(1-self.NPR**(-(self.gam_e-1)/self.gam_e))) * \
             (self.CA + (((self.gam_e - 1)/(2*self.gam_e))*(1 - self.Pa/self.Pe))/((self.pi*self.NPR*self.Pa/self.Pe)**((self.gam_e-1)/self.gam_e) -1))
-        if self.mdot != 0:
+        if self.mdot != None:
             self.Fg_ideal = self.mdot*self.Ve + self.Ae*(self.Pe - self.Pa)
             self.Drag = self.Fg_ideal*(1-self.Cfg)
+        else: 
+            self.Fg_ideal = None
+            self.Drag = None
     
         self.Fg_ideal_mdota = self.mdot_ratio *self.Ve + self.Ae_mdota *(self.Pe - self.Pa)
         self.Drag_mdota = self.Fg_ideal_mdota*(1-self.Cfg)
