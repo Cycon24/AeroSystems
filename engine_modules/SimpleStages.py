@@ -30,6 +30,11 @@ Created on Thu Aug 24 09:45:15 2023
 20250407:
     - Done: Updated stages to utilize previous stage's gas properties and allowing for 
     the properties to be set externally (for the combustors/mixers). 
+20251122:
+    - Noticed that there are errors in Nozzle setup, specifically for Pc calculation
+    that doesnt take into account ni which is a function of pi if provided.
+    - Done: Added ability to directly define "NextStage" and "BypassStages" for more complex engine geometries
+    
     
 """
 import numpy as np
@@ -171,6 +176,10 @@ class Stage():
         self.Ai_mdota = None 
         self.Ae_mdota = None
         
+        # Stage passes, to overwrite in forward
+        self.NextStage = self.inputs.get("NextStage", None)
+        self.BypassStages= self.inputs.get("BypassStages", [None])
+        
         
         # =============================================================================
         #   Unit Dict to be referenced if needed       
@@ -207,6 +216,12 @@ class Stage():
         #  - Mdot/ratio: Passed to each based on BPR for that stage
         #  - gas properties: Now passed unconditionally (20251009 - previously dependend on if next
         #                   stage defined them, but input gammas for a stage will not be)
+        
+        # Check if next and bypass stages were defined, overwrite if so:
+        if self.NextStage != None:
+            core_Stage = self.NextStage 
+        if self.BypassStages != [None]:
+            bypass_Stages = self.BypassStages 
         
         # pass to Core flow
         core_Stage.Toi = self.Toe
@@ -361,8 +376,15 @@ class Stage():
         # Check if we have area and mass flow rate without Mach number
         if self.Ai != None and self.mdot!=None and self.Mi == None: 
             # Also need mass flow rate
-            self.Mi = GD.Mach_at_mdot(self.mdot, self.Poi, self.Toi, self.Ai, Gamma=self.gam_i, R=self.R_i, gc=self.gc)
-            
+            if abs(self.mdot) < 1e-6:
+                self.Mi = 0.0 
+            else:
+                try:
+                    self.Mi = GD.Mach_at_mdot(self.mdot, self.Poi, self.Toi, self.Ai, Gamma=self.gam_i, R=self.R_i, gc=self.gc)
+                except ValueError as e:
+                    print(f'[Error]\t{self.StageName}_i at M0={self.Minf}\n{e}')
+                    print(f'mdot={self.mdot:.6f}, Pt={self.Poi:.3f}, Tt={self.Toi:.3f}, A={self.Ai:.4f}, Gamma={self.gam_i:.3f}, R={self.R_i:.2f}')
+                    self.Mi = None
            
             
         # Check if we have Mach number now
@@ -423,8 +445,14 @@ class Stage():
         # Calc Mach if we have area and mass flow rate but not Mach
         if self.Ae != None and self.mdot!=None and self.Me == None: 
             # Also need mass flow rate
-            self.Me = GD.Mach_at_mdot(self.mdot, self.Poe, self.Toe, self.Ae, Gamma=self.gam_e, R=self.R_e, gc=self.gc)
-            
+            if abs(self.mdot) < 1e-6:
+                self.Me = 0.0 
+            else:
+                try:
+                    self.Me = GD.Mach_at_mdot(self.mdot, self.Poe, self.Toe, self.Ae, Gamma=self.gam_e, R=self.R_e, gc=self.gc)
+                except ValueError as e:
+                    print(f'[Error]\t{self.StageName} at M0={self.Minf}\n{e}')
+                    self.Me = None
            
         # Check if we have Mach number now
         if self.Me != None:
@@ -437,8 +465,7 @@ class Stage():
         
             # Calculate area
             mdot_A = GD.mdot(self.Poe, self.Toe, 1, Mach=self.Me, Gamma=self.gam_e, R=self.R_e, gc=self.gc)
-            
-            self.Ae = None if self.mdot == None else self.mdot / mdot_A 
+            self.Ae = None if (self.mdot == None) or abs(mdot_A) < 1e-6 else self.mdot / mdot_A 
             self.Ae_mdota = self.mdot_ratio / mdot_A 
         
         return None
@@ -989,11 +1016,11 @@ class Mixer(Stage):
     def __init__(self, CoreMixStage, BypassMixStage, **kwargs):
         Stage.__init__(self, **kwargs)
         self.StageType = "Mixer"
-        self.UpdateInputs(CoreMixStage, BypassMixStage, StageName = "Mixer",StageID='M', **kwargs)
-
-    def UpdateInputs(self, CoreMixStage, BypassMixStage, **kwargs):
         self.CoreMix = CoreMixStage
         self.BypassMix = BypassMixStage
+        self.UpdateInputs(StageName = "Mixer",StageID='M', **kwargs)
+
+    def UpdateInputs(self, **kwargs):
         self._update_inputs_base(**kwargs) 
         self.BPR_f = self.inputs.get('BPR_f')
         self.MIX_GAS_PROPERTIES = self.inputs.get('MIX_GAS_PROPERTIES', True)
@@ -1011,6 +1038,8 @@ class Mixer(Stage):
             
         if self.IS_IDEAL:
             # Calculate bypass ratio from core flow ratio
+            raise Warning("[Warn]\t Ideal Mixer currently only support a single bypass.")
+            # NOTE: Only applicable with one bypass
             alpha = 1/self.CoreMix.mdot_ratio - 1
             self.tau = (1 + alpha * (self.BypassMix.Toe/self.CoreMix.Toe)) / (1 + alpha)
             self.pi = 1 if self.pi == None else self.pi
@@ -1029,13 +1058,20 @@ class Mixer(Stage):
         
             return None
         
+        
+            
+        
         # Check to ensure we have required mach numbers
-        if self.Mi == None and self.CoreMix.Me == None:
-            raise EngineErrors.MissingValue('Missing Coreflow Mach Number',self.StageName)
+        if self.CoreMix.Me == None:
+            if abs(self.mdot_ratio) < 1e-8:
+                self.CoreMix.Me = 0.0 # Try this 
+            else:
+                raise EngineErrors.MissingValue('Missing Coreflow Mach Number',self.StageName)
           
         # M_16 calculation
         # Gonna just rename values to make double checking equation easier
         M_6 = self.CoreMix.Me 
+        M_16 = self.BypassMix.Me 
         gam_6 = self.CoreMix.gam_e
         gam_16 = self.BypassMix.gam_e 
         cp_6 = self.CoreMix.cp_e
@@ -1047,35 +1083,70 @@ class Mixer(Stage):
         T_t6 = self.CoreMix.Toe 
         T_t16 = self.BypassMix.Toe 
         
-        M_16 = np.sqrt( (2/(gam_16 - 1)) * (( (P_t16/P_t6)*(1 + (M_6**2)*(gam_6 - 1)/2)**(gam_6/(gam_6-1))  )**((gam_16 - 1)/gam_16)  - 1)  )
-        if abs(self.BPR) < 1e-4:
-            M_16 = 0.01
-        self.BypassMix.Me = M_16 
+        self.gam_i = self.CoreMix.gam_e
+        self.R_i = self.CoreMix.R_e
+        self.cp_i = self.CoreMix.cp_e
+        self.Poi = self.CoreMix.Poe 
+        self.Toi = self.CoreMix.Toe
         
+        
+        # Check if Mach number at bypass was calculated:
+        if M_16 == None:
+            M_16 = np.sqrt( (2/(gam_16 - 1)) * (( (P_t16/P_t6)*(1 + (M_6**2)*(gam_6 - 1)/2)**(gam_6/(gam_6-1))  )**((gam_16 - 1)/gam_16)  - 1)  )
+            self.BypassMix.Me = M_16 
+        
+        # Check if mdot from bypass or M_16 == 0
+        NO_BYPASS = False
+        if abs(self.BypassMix.mdot_ratio) < 1e-5:
+            NO_BYPASS = True
+        if abs(M_16) < 1e-5:
+            NO_BYPASS = True 
+        
+        # BPR of traditional mixer = mdot_bp / (mdot_core + mdot_fuel), 
+        # so BPR_f = mdot_rat_bp / mdot_rat_core 
+        if abs(self.BypassMix.mdot_ratio) < 1e-8 or abs(self.CoreMix.mdot_ratio) < 1e-8:
+            self.BPR_f = 0 
+        else:
+            self.BPR_f = self.BypassMix.mdot_ratio / self.CoreMix.mdot_ratio
+        
+        # gas props will equal station 6 (core) if BPR_F = 0
         self.cp_6a = (cp_6 + self.BPR_f*cp_16) / (1 + self.BPR_f)
         self.R_6a = (R_6 + self.BPR_f*R_16) / (1 + self.BPR_f)
         self.gam_6a = self.cp_6a*self.gf / (self.cp_6a*self.gf - self.R_6a)
         
+        # Will eqal 1 if BPR_f = 0
         self.tau = (cp_6 / self.cp_6a) * (1 + self.BPR_f * (cp_16/cp_6)*(self.BypassMix.Toe/self.CoreMix.Toe)) / (1 + self.BPR_f)
         
         # if self.pi==None:
             # Use ideal pi 
         # A16_A6 = self.BPR_f*(P_t6/P_t16)*np.sqrt(T_t16/T_t6)*(GD.MassFlowParam_norm(M_6 ,gam_6)/(GD.MassFlowParam_norm(M_16,gam_16)))
+        
         # Calculate A16/A6
-        num = gam_16*R_6 * (1 + (M_16**2)*(gam_16-1)/2)
-        den = gam_6*R_16 * (1 + (M_6**2)*(gam_6-1)/2)
-        A16_A6 = self.BPR_f*np.sqrt(T_t16/T_t6)*(M_6/M_16) / np.sqrt(num/den)
+        if self.CoreMix.Ae == None or self.BypassMix.Ae == None:
+            num = gam_16*R_6 * (1 + (M_16**2)*(gam_16-1)/2)
+            den = gam_6*R_16 * (1 + (M_6**2)*(gam_6-1)/2)
+            if NO_BYPASS:
+                A16_A6 = 0.0
+            else:
+                A16_A6 = self.BPR_f*np.sqrt(T_t16/T_t6)*(M_6/M_16) / np.sqrt(num/den)
+        else:
+            A16_A6 = self.BypassMix.Ae / self.CoreMix.Ae
         self.A16_A6 = A16_A6
         # Calculate phi(M6A, gam_6a):
         num = 1 + self.BPR_f 
-        den = 1/np.sqrt(GD.Rayleigh_phi_MS(M_6,gam_6)) + self.BPR_f*np.sqrt(R_16*gam_6*(T_t16/T_t6)/(R_6*gam_16*GD.Rayleigh_phi_MS(M_16,gam_16)))
+        if NO_BYPASS:
+            den = 1/np.sqrt(GD.Rayleigh_phi_MS(M_6,gam_6)) + 0 # This avoids divide by 0 error
+        else:
+            den = 1/np.sqrt(GD.Rayleigh_phi_MS(M_6,gam_6)) + self.BPR_f*np.sqrt(R_16*gam_6*(T_t16/T_t6) / (R_6*gam_16*GD.Rayleigh_phi_MS(M_16,gam_16)))
+        
         phi = ((num/den)**2)* (self.R_6a*gam_6*self.tau)/(R_6*self.gam_6a)
-        # Calculate M_6A
+        # Calculate M_6A, should be = M6 if BPR_f=0
         M_6A = np.sqrt(2*phi / (1 - 2*self.gam_6a*phi + np.sqrt(1 - 2*(self.gam_6a+1)*phi)))
        
         self.pi_ideal = ((1+self.BPR_f)*np.sqrt(self.tau)/(1+ A16_A6))*(GD.MassFlowParam_norm(M_6 ,gam_6)*np.sqrt(self.gc/R_6) / (GD.MassFlowParam_norm(M_6A,self.gam_6a)*np.sqrt(self.gc/self.R_6a)))
-
-        self.pi_M = self.pi_ideal *self.pi
+        
+        self.pi = 1 if self.pi == None else self.pi
+        self.pi_M = self.pi_ideal * self.pi
         self.Me = M_6A
             
         self.Toe = self.tau * self.CoreMix.Toe 
@@ -1118,12 +1189,7 @@ class Mixer(Stage):
 class Nozzle(Stage):
     def __init__(self, nozzle_type='CD', **kwargs):
         Stage.__init__(self, **kwargs)
-        # if air_type == 'hot':
-        #     self.gam = self.gam_g
-        #     self.R = self.R_g
-        # else:
-        #     self.gam = self.gam_a
-        #     self.R = self.R
+        
         self.StageType = "Nozzle"
         self.nozzle_type = nozzle_type # 'C' for Converging, 'CD' for Conv-Div
         self.UpdateInputs(StageName = "Nozzle",StageID='n', **kwargs)
@@ -1133,19 +1199,22 @@ class Nozzle(Stage):
         self._update_inputs_base(**kwargs) 
         self.CA = self.inputs.get("CA", None) 
         self.CD = self.inputs.get("CD", None)
+        self.At = self.inputs.get("At", None)
+        self.At_max = self.inputs.get("At_max", None)
+        self.At_min = self.inputs.get("At_min", None)
+        self.Ae_max = self.inputs.get("Ae_max", None)
+        self.Ae_min = self.inputs.get("Ae_min", None)
+        
         
     def calculate(self):
-        # Check if choked
-        Tc = self.Toi*(2/(self.gam_i+1))
-        ni = 1 # TEMPORARY BC CURRENTLY NOT SUPPORTED TO NOT HAVE IT AN INPUT
-        Pc = self.Poi*(1 - (1/ni)*(1-Tc/self.Toi))**(self.gam_i/(self.gam_i-1))
-        
-        P_rat = self.Poi/self.Pa
-        P_crit = self.Poi/Pc
-        if P_rat > P_crit:
+        # Note: Assume all pressure loss occurs after throat for a CD Nozzle
+        self.IsChoked, Pc = self._check_nozzle_choke()
+        if self.IsChoked:
             # Nozzle is choked
+            # Check nozzle type
             if self.nozzle_type == 'C':
-                self.Pe = Pc # For Converging nozzle
+                # For Converging nozzle
+                self.Pe = Pc 
             else:
                 # CD Nozzle
                 if self.Pe == None: 
@@ -1167,17 +1236,17 @@ class Nozzle(Stage):
             self.pi =  ((self.NPR*(self.Pe/self.Pa))**((self.gam_i-1)/self.gam_i) - (self.ni*((self.NPR(self.Pe/self.Pa))**((self.gam_i-1)/self.gam_i) - 1))) ** (self.gam_i/(1-self.gam_i))
             
         else:
-            EngineErrors.IncompleteInputs("Missing eta_n or pi_n", self.StageName)
+            raise ValueError(f"[Error] Missing eta_n or pi_n in {self.StageName}")
         
         self.Poe = self.pi * self.Poi
-        self.Me = GD.Mach_at_PR(self.Poe/self.Pe,Gamma = self.gam_i)
+        self.Me = GD.Mach_at_PR(self.Poe/self.Pe, Gamma = self.gam_i)
         
         self.Te = self.Toi*(1-self.ni*(1-(self.Pe/self.Poi)**((self.gam_i-1)/self.gam_i)))
         self.Ve = self.Me*np.sqrt(self.gam_i*self.R_i*self.Te*self.gc)
         
         # Stag props at exit
         self.Toe = self.Toi
-        self.Poe = self.Pe * (1 + (self.gam_i -1)*(self.Me**2)/2)**(self.gam_i/(self.gam_i -1))
+        # self.Poe = self.Pe * (1 + (self.gam_i -1)*(self.Me**2)/2)**(self.gam_i/(self.gam_i -1))
         self.tau = self.Toe/self.Toi
         
         self.gam_e = self.gam_i 
@@ -1190,6 +1259,75 @@ class Nozzle(Stage):
         self.calcDetailProps_e()
         
         # Calculate Nozzle Drag
+        self._calculate_drag()
+        
+        self._zeroPropsIfNoFlow()
+        
+    def _check_nozzle_choke(self):
+        '''
+        Checks if the nozzle is choked. 
+        Process (mainly for CD nozzle):
+            - Check if mass-flow rate is provided
+                - If so, check if throat area is provided and if mdot there = Mach 1
+                - If throat area not provided, calculate it and check if within bounds for throat areas
+                
+    
+
+        Returns
+        -------
+        IsChoked
+            DESCRIPTION.
+        Pc : TYPE
+            DESCRIPTION.
+
+        '''
+        isChoked = False
+        # First check if mass flow is provided:
+        # if self.mdot != None:
+        #     # Calculate necessary throat area
+        #     Astar = GD.A_throat(self.mdot, self.Poi, self.Toi, self.gam_i, self.R_i, self.gc)
+        #     # Check if throat area provided:
+        #     if self.At != None:
+        #         # Check if At ~ Astar
+        #         if abs(self.Astar - self.At) < 1e-5:
+        #             # Is choked and areas match
+        #             IsChoked = True
+        #         elif self.Astar > self.At:
+        #             # Check if necessary area is larger (would reduce mass flow and cause surge)
+        #             raise Warning(f"[Warning]\t {self.StageName} choke reducing mass flow.")
+        #         else: # self.Astar < self.At:
+        #             # Not choked
+        #             IsChoked = False
+            
+        #     else: # throat area not provided
+        #         # Check if min and max are provided
+        #         if self.At_max != None and self.At_min !=None:
+        #             # Check if between values
+        #             if self.At_max > Astar and self.At_min < Astar:
+        #                 # It is, so set throat area to Astar
+        #                 self.At = Astar 
+        #             else:
+        #                 raise Warning(f"[Warning]\t {self.StageName} - Required throat area outside bounds of minmumt and maximum At\n\t" + 
+        #                               f"A*={Astar:.4f}, At_min={self.At_min:.4f}, At_max={self.At_max:.4f}")
+                    
+                
+        
+        
+        # Check if choked
+        Tc = self.Toi*(2/(self.gam_i+1))
+        ni = 1 if self.ni == None else self.ni # TEMPORARY BC CURRENTLY NOT SUPPORTED TO NOT HAVE IT AN INPUT
+        Pc = self.Poi*(1 - (1/ni)*(1-Tc/self.Toi))**(self.gam_i/(self.gam_i-1))
+        
+        P_rat = self.Poi/self.Pa
+        P_crit = self.Poi/Pc
+        if P_rat > P_crit:
+            IsChoked = True
+        else:
+            IsChoked = False
+        
+        return IsChoked, Pc
+    
+    def _calculate_drag(self):
         if self.ni != None:
             self.CV = np.sqrt(self.ni)
         else:
@@ -1207,7 +1345,20 @@ class Nozzle(Stage):
     
         self.Fg_ideal_mdota = self.mdot_ratio *self.Ve + self.Ae_mdota *(self.Pe - self.Pa)
         self.Drag_mdota = self.Fg_ideal_mdota*(1-self.Cfg)
+        return None
         
+    def _zeroPropsIfNoFlow(self):
+        if abs(self.mdot_ratio) < 1e-8:
+            self.Me = 0 
+            self.Ve = 0 
+            self.Drag = 0 
+            self.Drag_mdota = 0 
+            self.Pe = self.Pa 
+            self.Te = self.Ta 
+            self.Ae = 0
+            self.Ae_mdota = 0
+            
+    
     def StageValues(self):
         outs = Stage.StageValues(self)
         outs['performance']['C_V'] = self.CV
