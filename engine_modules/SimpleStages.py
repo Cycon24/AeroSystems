@@ -529,6 +529,7 @@ class Stage():
             'performance': performance}
         return stageVals
     
+
     def __str__(self):
         return self.StageType
     
@@ -556,6 +557,7 @@ class Intake(Stage):
         # Cant always assume this, there is a ram affect and streamtubes
         #   occuring outside the intake face
         
+        
         # Check if gas properties were given to intake
         if self.gam_i == None and self.gam_e == None:
             if self.cp_i == None and self.cp_e == None:
@@ -574,6 +576,7 @@ class Intake(Stage):
         Pt0 = self.Pa*self.pi_r 
         Tt0 = self.Ta*self.tau_r
         self.pi = 1 if self.pi == None else self.pi # Pt2/Pt1
+        
         # Run external conditions
         external = self.external_conditions(self.Minf, P0=self.Pa, T0=self.Ta, mdot=self.mdot, pi_dmax=self.pi)
         self.D_additive = external.get('D_add', None)
@@ -582,11 +585,6 @@ class Intake(Stage):
         self.Mi = external.get('M1', self.Mi)
         self.A0 = external.get('A0', None)
         self.eta_r = external['eta_r'] # Pt1/Pt0 
-        
-        
-        # print('RAM: \n\t eta {:.4f}\n\t tau {:.4f}\n\t pi {:.4f}'.format(self.eta_r, self.tau_r,self.pi_r))
-        # NOTE: tau_r and pi_r are the only ratios that are
-        # static and stagnation ratios
         
         # Correct the diffusor pressure ratio
         self.pi_d = self.pi * self.eta_r # total pressure loss from freestream to diffuser exit: Pt2/Pt0
@@ -628,6 +626,7 @@ class Intake(Stage):
         
         # Calculate detailed values
         self.calcDetailProps_e(self.AssumeSubsonicExit) # Assume subsonic at diffuser exit?
+        # Done
         
         
     def external_conditions(self, Minf, **kwargs):
@@ -749,74 +748,9 @@ class Compressor(Stage):
         # Calculate detailed props
         self.calcDetailProps_i()
         self.calcDetailProps_e()
+        
         # Done
-        
-    # Stage forward should handle this now    
-    # def forward(self, next_Stage_hot, next_Stage_cold=None):
-    #     next_Stage_hot.Toi = self.Toe
-    #     next_Stage_hot.Poi = self.Poe
-    #     next_Stage_hot.Ti  = self.Te
-    #     next_Stage_hot.Pi  = self.Pe
-    #     next_Stage_hot.Mi  = self.Me
-    #     next_Stage_hot.Vi  = self.Ve
-        
-    #     next_Stage_hot.gam_i = self.gam_e if next_Stage_hot.gam_i == None else next_Stage_hot.gam_i 
-    #     next_Stage_hot.cp_i = self.cp_e if next_Stage_hot.cp_i == None else next_Stage_hot.cp_i
-    #     next_Stage_hot.R_i = self.R_e if next_Stage_hot.R_i == None else next_Stage_hot.R_i 
-        
-    #     # Split airflow if there is bypass after this component
-    #     if next_Stage_cold == None:
-    #         # No Bypass
-    #         next_Stage_hot.mdot = self.mdot
-    #         next_Stage_hot.mdot_ratio = self.mdot_ratio
-    #     else:
-    #         # Yes Bypass
-    #         if self.BPR == None:
-    #             raise EngineErrors.MissingValue('BPR','Compressor')
-    #         else:
-    #             if self.mdot != None:
-    #                 # We have actual mass flow 
-    #                 # Note alpha = BPR = mdot_bypass / mdot_core
-    #                 # mdot = mdot_core + mdot_bypass
-    #                 # mdot_core = mdot_bypass / BPR
-    #                 # mdot_core = (mdot - mdot_core) / BPR
-    #                 # mdot_core*BPR = mdot - mdot_core
-    #                 # mdot_core(BPR + 1) = mdot
-    #                 # mdot_core = mdot/(BPR + 1)
-    #                 mdot_h = self.mdot/(self.BPR+1) # Core 
-    #                 mdot_c = self.mdot - mdot_h
-                    
-    #                 next_Stage_hot.mdot = mdot_h
-    #                 next_Stage_cold.mdot = mdot_c
-                    
-    #                 # mdot Ratio Calcs
-    #                 mdot_ratio_h = 1/(self.BPR + 1) # Denotes mdot_core / mdot_total
-    #                 mdot_ratio_c = 1 - mdot_ratio_h
-                    
-    #                 next_Stage_hot.mdot_ratio = mdot_ratio_h
-    #                 next_Stage_cold.mdot_ratio = mdot_ratio_c
-
-    #             else:
-    #                 # No inputted mdot
-    #                 mdot_ratio_h = 1/(self.BPR + 1) # Denotes mdot_core / mdot_total
-    #                 mdot_ratio_c = 1 - mdot_ratio_h
-                    
-    #                 next_Stage_hot.mdot_ratio = mdot_ratio_h
-    #                 next_Stage_cold.mdot_ratio = mdot_ratio_c
    
-    #                 # Dont need to send mdot ratio to cold section
-                    
-    #             next_Stage_cold.Toi = self.Toe
-    #             next_Stage_cold.Poi = self.Poe
-    #             next_Stage_cold.Ti  = self.Te
-    #             next_Stage_cold.Pi  = self.Pe
-    #             next_Stage_cold.Mi  = self.Me
-    #             next_Stage_cold.Vi  = self.Ve
-                
-    #             next_Stage_cold.gam_i = self.gam_e if next_Stage_cold.gam_i == None else next_Stage_cold.gam_i 
-    #             next_Stage_cold.cp_i = self.cp_e if next_Stage_cold.cp_i == None else next_Stage_cold.cp_i
-    #             next_Stage_cold.R_i = self.R_e if next_Stage_cold.R_i == None else next_Stage_cold.R_i 
-    
         
     def calculate_ni_c(self, np, gamma=1.4):
         '''
@@ -1238,14 +1172,23 @@ class Nozzle(Stage):
         else:
             raise ValueError(f"[Error] Missing eta_n or pi_n in {self.StageName}")
         
+        # Stag props at exit
         self.Poe = self.pi * self.Poi
-        self.Me = GD.Mach_at_PR(self.Poe/self.Pe, Gamma = self.gam_i)
+        self.Toe = self.Toi
         
+        try:
+            Me_mdot = GD.Mach_at_mdot(self.mdot, self.Poe, self.Toe, self.Ae_max, self.gam_i, self.R_i, self.gc, forceSupersonic=self.IsChoked)
+        except:
+            Me_mdot = 10000 
+    
+        Me_max = GD.Mach_at_PR(self.Poe/self.Pe, Gamma = self.gam_i)
+        self.Me = min(Me_max, Me_mdot) 
+        self.Pe = self.Poe/GD.Po_P_ratio(self.Me, self.gam_i)
         self.Te = self.Toi*(1-self.ni*(1-(self.Pe/self.Poi)**((self.gam_i-1)/self.gam_i)))
         self.Ve = self.Me*np.sqrt(self.gam_i*self.R_i*self.Te*self.gc)
         
-        # Stag props at exit
-        self.Toe = self.Toi
+        
+        
         # self.Poe = self.Pe * (1 + (self.gam_i -1)*(self.Me**2)/2)**(self.gam_i/(self.gam_i -1))
         self.tau = self.Toe/self.Toi
         

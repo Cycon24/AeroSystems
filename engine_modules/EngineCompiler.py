@@ -57,7 +57,7 @@ class Engine():
         
         self.MAIN_CALCULATION_UPDATED = False 
         
-    def calculate(self, printVals: bool = True) -> None:
+    def calculate(self, printVals: bool = True, skipLoops: bool = False) -> None:
         '''
         Calculates the properties of the air throughout the engine.
 
@@ -272,7 +272,7 @@ class Engine():
             if printRunSteps:  
                 print(printstr)
             # Run Calculation Loop
-            self.calculate(printVals=printVals)
+            self.calculate(printVals=printVals, skipLoops=False)
             
             # Run output functions
             if perfFunctions != None:
@@ -843,7 +843,7 @@ class Engine():
 
         '''
         # Run the function
-        self.calculate(False)
+        self.calculate(printVals=False, skipLoops=True)
         funcOuts = func()
         for key in funcOuts.keys():
             if type(funcOuts[key]) == dict:
@@ -1708,6 +1708,8 @@ class SR71_Engine(Engine):
         
         # Areas
         # A1 determined within simple inlet calcs
+        A_bp1e = self.inputs.get("A_bp1e", None)
+        A_bp2e = self.inputs.get("A_bp2e", None)
         A2      = self.inputs.get('A_2', None)
         A25     = self.inputs.get('A_2.5', None)
         A25e     = self.inputs.get('A_2.5', None)
@@ -1719,6 +1721,8 @@ class SR71_Engine(Engine):
         A6      =  self.inputs.get('A_6', None)
         A6A     =  self.inputs.get('A_6A', None)
         A7      =  self.inputs.get('A_7', None)
+        An_max  = self.inputs.get('An_max',None)
+        self.A_noz_max  =  self.inputs.get("An_noz_max", None)
         
         self.gen_kwargs = {
             'Units': self.units, 
@@ -1745,8 +1749,8 @@ class SR71_Engine(Engine):
             # self.F = kwargs.get('F')
             # Define each stage and pass in parameters
             self.Inlet       = SS.Intake    (**self.gen_kwargs, m_dot=mdot, pi=pi_d, cp_i=cp_air, Gamma_i=gam_air, BPR=[alpha_bp1, alpha_bp2])
-            self.Inlet_BP1   = SS.Duct      (**self.gen_kwargs, pi=pi_bp1, tau=tau_bp1)
-            self.Inlet_BP2   = SS.Duct      (**self.gen_kwargs, pi=pi_bp2, tau=tau_bp2)
+            self.Inlet_BP1   = SS.Duct      (**self.gen_kwargs, pi=pi_bp1, tau=tau_bp1, Ae=A_bp1e)
+            self.Inlet_BP2   = SS.Duct      (**self.gen_kwargs, pi=pi_bp2, tau=tau_bp2, Ae=A_bp2e)
             self.Compressor1 = SS.Compressor(**self.gen_kwargs, pi=pi_c1, np=npc1, ni=eta_f, BPR=alpha_bpc, Ai=A2, Ae=A25)
             self.BP_duct     = SS.Duct      (**self.gen_kwargs, pi=pi_bpc, tau=tau_bpc, Ai=A_bp_ci, Ae=A_bp_ce)
             self.Compressor2 = SS.Compressor(**self.gen_kwargs, pi=pi_c2, np=npc2, ni=eta_c, pi_overall=pi_overall, Ai=A25e, Ae=A3)
@@ -1756,8 +1760,8 @@ class SR71_Engine(Engine):
             self.Mixer       = SS.Mixer     (self.TurbDuct, self.BP_duct, **self.gen_kwargs, pi=pi_M, MIX_GAS_PROPERTIES=self.inputs.get('MIX_GAS_PROPERTIES'), Ai=A6, Ae=A6A)
             self.BypassMixer = SS.Mixer     (self.Inlet_BP1, self.Inlet_BP2, **self.gen_kwargs, pi=pi_Mbp, MIX_GAS_PROPERTIES=self.inputs.get('MIX_GAS_PROPERTIES'))
             self.Afterburner = SS.Combustor (**self.gen_kwargs, pi=pi_AB, ni=eta_ab, Toe=To_ab_e, dTb=dTo_ab, cp_e=cp_ab, Gamma_e=gam_ab, Ai=A6A, Ae=A7)
-            self.Nozzle_Core = SS.Nozzle    (nozzle_type='CD',**self.gen_kwargs, pi=pi_n) 
-            self.Nozzle_Cold = SS.Nozzle    (nozzle_type='CD',**self.gen_kwargs, pi=pi_n)
+            self.Nozzle_Core = SS.Nozzle    (nozzle_type='CD',**self.gen_kwargs, pi=pi_n, Ae_max=An_max) 
+            self.Nozzle_Cold = SS.Nozzle    (nozzle_type='C',**self.gen_kwargs, pi=1)
             
             
             
@@ -1789,8 +1793,8 @@ class SR71_Engine(Engine):
             
         else:
             self.Inlet      .UpdateInputs(**self.gen_kwargs, m_dot=mdot, pi=pi_d, cp_i=cp_air, Gamma_i=gam_air, BPR=[alpha_bp1, alpha_bp2])
-            self.Inlet_BP1  .UpdateInputs(**self.gen_kwargs, pi=pi_bp1, tau=tau_bp1)
-            self.Inlet_BP2  .UpdateInputs(**self.gen_kwargs, pi=pi_bp2, tau=tau_bp2)
+            self.Inlet_BP1  .UpdateInputs(**self.gen_kwargs, pi=pi_bp1, tau=tau_bp1, Ae=A_bp1e)
+            self.Inlet_BP2  .UpdateInputs(**self.gen_kwargs, pi=pi_bp2, tau=tau_bp2, Ae=A_bp2e)
             self.Compressor1.UpdateInputs(**self.gen_kwargs, pi=pi_c1, np=npc1, ni=eta_f, BPR=alpha_bpc, Ai=A2, Ae=A25)
             self.BP_duct    .UpdateInputs(**self.gen_kwargs, pi=pi_bpc, tau=tau_bpc,                     Ai=A_bp_ci, Ae=A_bp_ce)
             self.Compressor2.UpdateInputs(**self.gen_kwargs, pi=pi_c2, np=npc2, ni=eta_c, pi_overall=pi_overall, Ai=A25e, Ae=A3)
@@ -1800,14 +1804,14 @@ class SR71_Engine(Engine):
             self.Mixer      .UpdateInputs(**self.gen_kwargs, pi=pi_M, MIX_GAS_PROPERTIES=self.inputs.get('MIX_GAS_PROPERTIES'), Ai=A6, Ae=A6A)
             self.BypassMixer.UpdateInputs(**self.gen_kwargs, pi=pi_M, MIX_GAS_PROPERTIES=self.inputs.get('MIX_GAS_PROPERTIES'))
             self.Afterburner.UpdateInputs(**self.gen_kwargs, pi=pi_AB, ni=eta_ab, Toe=To_ab_e, dTb=dTo_ab, cp_e=cp_ab, Gamma_e=gam_ab, Ai=A6A, Ae=A7)
-            self.Nozzle_Core.UpdateInputs(**self.gen_kwargs, pi=pi_n) 
-            self.Nozzle_Cold.UpdateInputs(**self.gen_kwargs, pi=pi_n)
+            self.Nozzle_Core.UpdateInputs(**self.gen_kwargs, pi=pi_n, Ae_max=An_max) 
+            self.Nozzle_Cold.UpdateInputs(**self.gen_kwargs, pi=1)
             
              
           # ___________________ End ______________________________    
         
              
-    def calculate(self, printVals: bool = True) -> None:
+    def calculate(self, printVals: bool = True, skipLoops: bool = False) -> None:
         '''
         Calculates the properties of the air throughout the engine.
 
@@ -1821,78 +1825,106 @@ class SR71_Engine(Engine):
         None.
 
         '''
-        # iterations = 0
-        # if hasattr(self, 'solverType'):
-        #     self.inputs[self.solverType] = None
         
-        # if self.inputs["BPR"] == None and self.inputs["pi_f"] != None:
-        #     print("[Note]\t Fan Pressure Ratio given, iterative solving for BPR")
-        #     self.solverType = "BPR"
-        #     # Need to iterate to solve for BPR
-        #     # Get gas props
-        #     cp_a = self.Inlet.cp_i 
-        #     cp_g = self.Combustor.cp_e
-        #     gam_a = self.Inlet.gam_i 
-        #     gam_g = self.Combustor.gam_e
-        #     Ta =  self.inputs.get('Ta')
-        #     To_ti = self.Combustor.Toe
-        #     tau_lambda = cp_g*To_ti / (cp_a*Ta)
-        #     tau_r = 1 + (self.inputs.get('Minf')**2)*(gam_a - 1)/2
-        #     tau_c = self.Compressor.pi_overall**((gam_a-1)/(gam_a*self.Compressor.np))
-        #     tau_f = self.Fan.pi**((gam_a-1)/(gam_a*self.Fan.np))
+        '''
+        SCHEDULES:
+        Shocktrap bleed
+            - Always open
+        Aft Inlet Bleed
+            - Closed: M = 0 to 1.7
+            - Pos A:  M = 1.7 to 1.9
+            - Pos B:  M = 1.9 to 2.7
+            - Pos A:  M = 2.7 to 3.0
+            - Closed: M = 3.0 and above
+            A: 15% open
+            B: 50% open
+        
+        Compressor Bypass
+            - Opens at CIT around 85-115C 
             
-        #     # print(locals())
-        #     # Get first-pass guess on alpha, will refine down the road
-        #     f = cp_a*Ta *(tau_lambda - tau_r*tau_c) / self.inputs['h_PR']
-        #     # alpha_f = (self.inputs['eta_m']*(1+f) * (tau_lambda/tau_c)*(1 - (self.Fan.pi/(self.Compressor.pi*self.Combustor.pi))**((gam_g-1)*self.Turbine.np/gam_g)) - (tau_c-1)) / (tau_f-1)
-        #     # alpha = alpha_f*(1+f)   
-        #     alpha = (tau_lambda*(tau_c-tau_f))/(tau_r*tau_c*(tau_f-1))  - (tau_c-1)/(tau_f-1)
-        #     alpha_f = alpha / (1+f)
-           
-        #     error = 0
-        #     dPt = 1
-        #     tol = 1e-4
-        #     while abs(dPt) > tol:
-        #         iterations += 1
-        #         alpha += error 
-        #         # check if alpha went < 0
-        #         if alpha < 0:
-        #             # print('Alpha set to 0')
-        #             alpha = 0 
-        #             alpha_f = 0 
-        #         else:
-        #             alpha_f = alpha / (1+f) if self.Combustor.f == None else alpha / (1+self.Combustor.f)
-        #         # print(' f = {}\n alpha = {}\n alpha_f = {}'.format(f, alpha,alpha_f))
+        '''
+        # First get scheduled values:
+        COMP_BYPASS_OPEN = self.compressor_bypass_initiation(self.inputs["Minf"])
+        BPR_bp1, BPR_bp2 = self.inlet_bypass_schedule(self.inputs["Minf"])
+        Ai_bp1 = self.shocktrap_area_schedule(self.inputs["Minf"])
+        Ai_bp2 = self.aft_area_schedule(self.inputs["Minf"])
+        pi_c1, pi_c = self.pressure_ratio_schedule(self.inputs["Minf"])
+        
+        self.UpdateInputs(BPR_bp1=BPR_bp1, BPR_bp2=BPR_bp2, pi_c1=pi_c1, pi_c=pi_c)
+        self.Inlet_BP1.UpdateInputs(Ai=Ai_bp1)
+        self.Inlet_BP2.UpdateInputs(Ai=Ai_bp2)
+        # if COMP_BYPASS_OPEN:
+        #     self.UpdateInputs(BPR_bpc=0.1)
+        
+        iterations = 0
+               
+        
+        error = 0
+        dP = 1
+        tol = 1e-4
+        alpha = 0.4 
+        while abs(dP) > tol:
+            alpha += error if abs(error) < alpha else error/5 
+            # check if alpha went < 0
+            if alpha < 0 or not COMP_BYPASS_OPEN:
+                # print('Alpha set to 0')
+                alpha = 0 
                 
-        #         self.inputs['BPR'] = alpha # Need this here on case mdot=None
-        #         self.inputs['BPR_f'] = alpha_f 
-                
-        #         # Pass into needed components
-        #         self.Fan.BPR = self.inputs['BPR']
-        #         self.Combustor.BPR = self.inputs['BPR']
-        #         # self.Combustor.f = f 
-        #         self.Mixer.BPR_f = self.inputs['BPR_f']
-                
-        #         self._base_calculate()
-                
-        #         # Check error
-        #         if abs(alpha) < tol:
-        #             dP = 0 
-        #             error = 0 
-        #             # print('Warning: Bypass Ratio reached 0...')
-        #         else:
-        #             dP = self.Turbine.Pe - self.BP_duct.Pe 
-        #             error = dP/(self.Turbine.Pe + self.BP_duct.Pe) #/self.Turbine.Poe 
-        self._base_calculate()       
-                
+            print(f"[{iterations}], alpha_bpc = {alpha:.4f}, dP = {dP:.4f} Pa")
+            iterations += 1    
+            # print(' f = {}\n alpha = {}\n alpha_f = {}'.format(f, alpha,alpha_f))
+            self.UpdateInputs(BPR_bpc=alpha)
+            self._base_calculate()
+            if skipLoops: break
+            
+            # Ensure compressor bypass is open
+            if COMP_BYPASS_OPEN:
+                # Check error
+                if abs(alpha) < tol:
+                    dP = 0 
+                    error = 0 
+                    # print('Warning: Bypass Ratio reached 0...')
+                else:
+                    Pturb = self.TurbDuct.Poe # self.TurbDuct.Pe if self.TurbDuct.Pe != None else self.TurbDuct.Poe
+                    Pbp = self.BP_duct.Poe # self.BP_duct.Pe if self.BP_duct.Pe != None else self.BP_duct.Poe
+                    dP = Pturb - Pbp 
+                    error = dP/(Pturb + Pbp) #/self.Turbine.Poe 
+            else:
+                break
+        # self._base_calculate(printVals) 
+        
+        # Recalculate nozzle info
+        An_core_max = self.A_noz_max - self.Nozzle_Cold.Ae 
+        self.UpdateInputs(An_max = An_core_max)
+        self._base_calculate()
          
         if printVals:
             for i in range(0,len(self.AllStages)):   
-                 self.AllStages[i][0].printOutputs()
-                 if isinstance(self.AllStages[i][1], list):
-                     for stag in self.AllStages[i][1]:
-                         stag.printOutputs()
+                  self.AllStages[i][0].printOutputs()
+                  if isinstance(self.AllStages[i][1], list):
+                      for stag in self.AllStages[i][1]:
+                          stag.printOutputs()
         return None
+    
+    def compressor_bypass_initiation(self, Minf):
+        if Minf < 1.9:
+            return False
+        else:
+            return True
+     
+    
+    def inlet_bypass_schedule(self, Minf): 
+        return None 
+    
+    def shocktrap_area_schedule(self, Minf): 
+        return None 
+    
+    def aft_area_schedule(self, Minf):
+        return None
+    
+    def pressure_ratio_schedule(self, Minf):
+        return None
+        
     
 # =============================================================================
 #  Main Testing
