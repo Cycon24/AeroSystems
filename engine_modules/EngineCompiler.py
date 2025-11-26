@@ -1689,8 +1689,8 @@ class SR71_Engine(Engine):
         pi_bp1 = 1 # forward intake bypass
         pi_bp2 = 1 # aft intake bypass
         pi_bpc = 1 # compressor bleed
-        tau_bp1 = 1 # forward intake bypass
-        tau_bp2 = 1 # aft intake bypass
+        tau_bp1 = self.inputs.get('tau_bp1',1) # forward intake bypass
+        tau_bp2 = self.inputs.get('tau_bp1',1) # aft intake bypass
         tau_bpc = 1 # compressor bleed
         
         # Bypass Duct ratios
@@ -1907,6 +1907,7 @@ class SR71_Engine(Engine):
         return None
     
     def compressor_bypass_initiation(self, Minf):
+        # return False
         if Minf < 1.9:
             return False
         else:
