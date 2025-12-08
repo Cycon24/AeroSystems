@@ -158,11 +158,12 @@ class Engine():
         D_noz  = 0
         KE_rat_noz = 0 
         for noz in Nozzles:
-            noz_mom_sum += noz.mdot_ratio*noz.Ve/a0
-            noz_pres_sum += noz.Ae_mdota*(noz.Pe - Pa)
+        
+            noz_mom_sum += noz.mdot_ratio*np.nan_to_num(noz.Ve)/a0 
+            noz_pres_sum += np.nan_to_num(noz.Ae_mdota)*(np.nan_to_num(noz.Pe) - Pa) 
+            KE_rat_noz  += noz.mdot_ratio*(np.nan_to_num(noz.Ve)/a0)**2 
+            D_noz  += 0 if noz.Drag == None else np.nan_to_num(noz.Drag)
             
-            D_noz  += 0 if noz.Drag == None else noz.Drag 
-            KE_rat_noz  += noz.mdot_ratio*(noz.Ve/a0)**2
            
         F_mdot = (a0/gc)*(noz_mom_sum - Minf) + noz_pres_sum 
         SFC = f_tot / F_mdot 
@@ -1775,7 +1776,7 @@ class SR71_Engine(Engine):
             self.Mixer      .UpdateInputs(StageName = "CoreMixer", StageID="M_core") #
             self.Afterburner.UpdateInputs(StageName = 'Afterburner', StageID="ab") #, NextStage=self.Nozzle_Core)
             self.BypassMixer.UpdateInputs(StageName = "BPMixer", StageID="M_bp") #, NextStage=self.Nozzle_Cold)
-            self.Nozzle_Cold.UpdateInputs(StageName = "BPNozzle", StageID="n_bp")
+            self.Nozzle_Cold.UpdateInputs(StageName = "BPNozzle", StageID="n_bp", IS_IDEAL=True)
             # Define all stages in engine to iterate through
             # Two dimensional since there is a bypass, ie one stage
             # passes params to two different stages
@@ -1806,6 +1807,7 @@ class SR71_Engine(Engine):
             self.Afterburner.UpdateInputs(**self.gen_kwargs, pi=pi_AB, ni=eta_ab, Toe=To_ab_e, dTb=dTo_ab, cp_e=cp_ab, Gamma_e=gam_ab, Ai=A6A, Ae=A7)
             self.Nozzle_Core.UpdateInputs(**self.gen_kwargs, pi=pi_n, Ae_max=An_max) 
             self.Nozzle_Cold.UpdateInputs(**self.gen_kwargs, pi=1)
+            self.Nozzle_Cold.UpdateInputs(IS_IDEAL=True)
             
              
           # ___________________ End ______________________________    
@@ -1861,10 +1863,10 @@ class SR71_Engine(Engine):
         
         error = 0
         dP = 1
-        tol = 1e-4
-        alpha = 0.4 
+        tol = 1e-2
+        alpha = 1.0
         while abs(dP) > tol:
-            alpha += error if abs(error) < alpha else error/5 
+            alpha += error if error + alpha > 0 else error/5 
             # check if alpha went < 0
             if alpha < 0 or not COMP_BYPASS_OPEN:
                 # print('Alpha set to 0')
@@ -1880,7 +1882,7 @@ class SR71_Engine(Engine):
             # Ensure compressor bypass is open
             if COMP_BYPASS_OPEN:
                 # Check error
-                if abs(alpha) < tol:
+                if abs(alpha) < 1e-5:
                     dP = 0 
                     error = 0 
                     # print('Warning: Bypass Ratio reached 0...')

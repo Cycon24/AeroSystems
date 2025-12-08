@@ -382,8 +382,8 @@ class Stage():
                 try:
                     self.Mi = GD.Mach_at_mdot(self.mdot, self.Poi, self.Toi, self.Ai, Gamma=self.gam_i, R=self.R_i, gc=self.gc)
                 except ValueError as e:
-                    print(f'[Error]\t{self.StageName}_i at M0={self.Minf}\n{e}')
-                    print(f'mdot={self.mdot:.6f}, Pt={self.Poi:.3f}, Tt={self.Toi:.3f}, A={self.Ai:.4f}, Gamma={self.gam_i:.3f}, R={self.R_i:.2f}')
+                    print(f'[Error]\t{self.StageName}_i at M0={self.Minf:.3f}\n{e}')
+                    # print(f'mdot={self.mdot:.6f}, Pt={self.Poi:.3f}, Tt={self.Toi:.3f}, A={self.Ai:.4f}, Gamma={self.gam_i:.3f}, R={self.R_i:.2f}')
                     self.Mi = None
            
             
@@ -451,7 +451,7 @@ class Stage():
                 try:
                     self.Me = GD.Mach_at_mdot(self.mdot, self.Poe, self.Toe, self.Ae, Gamma=self.gam_e, R=self.R_e, gc=self.gc)
                 except ValueError as e:
-                    print(f'[Error]\t{self.StageName} at M0={self.Minf}\n{e}')
+                    print(f'[Error]\t{self.StageName}_e at M0={self.Minf:.2f}\n{e}')
                     self.Me = None
            
         # Check if we have Mach number now
@@ -578,7 +578,7 @@ class Intake(Stage):
         self.pi = 1 if self.pi == None else self.pi # Pt2/Pt1
         
         # Run external conditions
-        external = self.external_conditions(self.Minf, P0=self.Pa, T0=self.Ta, mdot=self.mdot, pi_dmax=self.pi)
+        external = self.external_conditions(self.Minf, P0=self.Pa, T0=self.Ta, mdot=self.mdot, pi_dmax=self.pi, BPRs=self.BPR)
         self.D_additive = external.get('D_add', None)
         self.D_nacelle = external.get("D_nac", None)
         self.mdot = external.get('mdot', self.mdot)
@@ -1131,6 +1131,7 @@ class Nozzle(Stage):
 
     def UpdateInputs(self, **kwargs):
         self._update_inputs_base(**kwargs) 
+        self.CV = self.inputs.get("CA", None) 
         self.CA = self.inputs.get("CA", None) 
         self.CD = self.inputs.get("CD", None)
         self.At = self.inputs.get("At", None)
@@ -1271,23 +1272,30 @@ class Nozzle(Stage):
         return IsChoked, Pc
     
     def _calculate_drag(self):
-        if self.ni != None:
-            self.CV = np.sqrt(self.ni)
+        if not self.IS_IDEAL:
+            if self.ni != None:
+                self.CV = np.sqrt(self.ni)
+            else:
+                self.CV = 1
+            self.CA = 1 if self.CA == None else self.CA
+            self.CD = 1 if self.CD == None else self.CD
+            self.Cfg = self.CD*self.CV*np.sqrt((1 - ((self.Pe/self.Pa)/(self.NPR*self.CD**2))**((self.gam_e-1)/self.gam_e))/(1-self.NPR**(-(self.gam_e-1)/self.gam_e))) * \
+                (self.CA + (((self.gam_e - 1)/(2*self.gam_e))*(1 - self.Pa/self.Pe))/((self.pi*self.NPR*self.Pa/self.Pe)**((self.gam_e-1)/self.gam_e) -1))
+            if self.mdot != None:
+                self.Fg_ideal = self.mdot*self.Ve + self.Ae*(self.Pe - self.Pa)
+                self.Drag = self.Fg_ideal*(1-self.Cfg)
+            else: 
+                self.Fg_ideal = None
+                self.Drag = None
+        
+            self.Fg_ideal_mdota = self.mdot_ratio *self.Ve + self.Ae_mdota *(self.Pe - self.Pa)
+            self.Drag_mdota = self.Fg_ideal_mdota*(1-self.Cfg)
         else:
-            self.CV = 1
-        self.CA = 1 if self.CA == None else self.CA
-        self.CD = 1 if self.CD == None else self.CD
-        self.Cfg = self.CD*self.CV*np.sqrt((1 - ((self.Pe/self.Pa)/(self.NPR*self.CD**2))**((self.gam_e-1)/self.gam_e))/(1-self.NPR**(-(self.gam_e-1)/self.gam_e))) * \
-            (self.CA + (((self.gam_e - 1)/(2*self.gam_e))*(1 - self.Pa/self.Pe))/((self.pi*self.NPR*self.Pa/self.Pe)**((self.gam_e-1)/self.gam_e) -1))
-        if self.mdot != None:
-            self.Fg_ideal = self.mdot*self.Ve + self.Ae*(self.Pe - self.Pa)
-            self.Drag = self.Fg_ideal*(1-self.Cfg)
-        else: 
+            self.Cfg = None
+            self.Fg_ideal_mdota = None
+            self.Drag_mdota = None
             self.Fg_ideal = None
             self.Drag = None
-    
-        self.Fg_ideal_mdota = self.mdot_ratio *self.Ve + self.Ae_mdota *(self.Pe - self.Pa)
-        self.Drag_mdota = self.Fg_ideal_mdota*(1-self.Cfg)
         return None
         
     def _zeroPropsIfNoFlow(self):
