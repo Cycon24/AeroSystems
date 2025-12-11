@@ -382,7 +382,7 @@ class Stage():
                 try:
                     self.Mi = GD.Mach_at_mdot(self.mdot, self.Poi, self.Toi, self.Ai, Gamma=self.gam_i, R=self.R_i, gc=self.gc)
                 except ValueError as e:
-                    print(f'[Error]\t{self.StageName}_i at M0={self.Minf:.3f}\n{e}')
+                    print(f'[Error]\t{self.StageName}_i at M0={self.Minf:.3f}: {e}')
                     # print(f'mdot={self.mdot:.6f}, Pt={self.Poi:.3f}, Tt={self.Toi:.3f}, A={self.Ai:.4f}, Gamma={self.gam_i:.3f}, R={self.R_i:.2f}')
                     self.Mi = None
            
@@ -395,6 +395,9 @@ class Stage():
             # Calculate static properties
             self.Ti = flow_props['T_To'] * self.Toi
             self.Pi = flow_props['P_Po'] * self.Poi 
+            
+            # Calculate velocity
+            self.Vi = self.Mi * np.sqrt(self.Ti*self.gam_i*self.R_i*self.gc)
         
             # Calculate area
             mdot_A = GD.mdot(self.Poi, self.Toi, 1, Mach=self.Mi, Gamma=self.gam_i, R=self.R_i, gc=self.gc)
@@ -451,7 +454,7 @@ class Stage():
                 try:
                     self.Me = GD.Mach_at_mdot(self.mdot, self.Poe, self.Toe, self.Ae, Gamma=self.gam_e, R=self.R_e, gc=self.gc)
                 except ValueError as e:
-                    print(f'[Error]\t{self.StageName}_e at M0={self.Minf:.2f}\n{e}')
+                    print(f'[Error]\t{self.StageName}_e at M0={self.Minf:.3f}: {e}')
                     self.Me = None
            
         # Check if we have Mach number now
@@ -462,6 +465,9 @@ class Stage():
             # Calculate static properties
             self.Te = flow_props['T_To'] * self.Toe
             self.Pe = flow_props['P_Po'] * self.Poe 
+            
+            # Calculate velocity
+            self.Ve = self.Me * np.sqrt(self.Te*self.gam_e*self.R_e*self.gc)
         
             # Calculate area
             mdot_A = GD.mdot(self.Poe, self.Toe, 1, Mach=self.Me, Gamma=self.gam_e, R=self.R_e, gc=self.gc)

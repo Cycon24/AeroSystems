@@ -1756,7 +1756,7 @@ class SR71_Engine(Engine):
             self.BP_duct     = SS.Duct      (**self.gen_kwargs, pi=pi_bpc, tau=tau_bpc, Ai=A_bp_ci, Ae=A_bp_ce)
             self.Compressor2 = SS.Compressor(**self.gen_kwargs, pi=pi_c2, np=npc2, ni=eta_c, pi_overall=pi_overall, Ai=A25e, Ae=A3)
             self.Combustor   = SS.Combustor (**self.gen_kwargs, Toe=To_ti, pi=pi_b, ni=eta_b, cp_e=cp_b, Gamma_e=gam_b, Ai=A3, Ae=A4)
-            self.Turbine     = SS.Turbine   ([self.Compressor1, self.Compressor1], **self.gen_kwargs, nm=eta_m, np=npt, Ai=A4, Ae=A5)
+            self.Turbine     = SS.Turbine   ([self.Compressor1, self.Compressor2], **self.gen_kwargs, nm=eta_m, np=npt, Ai=A4, Ae=A5)
             self.TurbDuct    = SS.Duct      (**self.gen_kwargs, Ai=A5, Ae=A6)
             self.Mixer       = SS.Mixer     (self.TurbDuct, self.BP_duct, **self.gen_kwargs, pi=pi_M, MIX_GAS_PROPERTIES=self.inputs.get('MIX_GAS_PROPERTIES'), Ai=A6, Ae=A6A)
             self.BypassMixer = SS.Mixer     (self.Inlet_BP1, self.Inlet_BP2, **self.gen_kwargs, pi=pi_Mbp, MIX_GAS_PROPERTIES=self.inputs.get('MIX_GAS_PROPERTIES'))
@@ -1850,9 +1850,9 @@ class SR71_Engine(Engine):
         BPR_bp1, BPR_bp2 = self.inlet_bypass_schedule(self.inputs["Minf"])
         Ai_bp1 = self.shocktrap_area_schedule(self.inputs["Minf"])
         Ai_bp2 = self.aft_area_schedule(self.inputs["Minf"])
-        pi_c1, pi_c = self.pressure_ratio_schedule(self.inputs["Minf"])
+        # pi_c1, pi_c = self.pressure_ratio_schedule(self.inputs["Minf"])
         
-        self.UpdateInputs(BPR_bp1=BPR_bp1, BPR_bp2=BPR_bp2, pi_c1=pi_c1, pi_c=pi_c)
+        self.UpdateInputs(BPR_bp1=BPR_bp1, BPR_bp2=BPR_bp2) #, pi_c1=pi_c1, pi_c=pi_c)
         self.Inlet_BP1.UpdateInputs(Ai=Ai_bp1)
         self.Inlet_BP2.UpdateInputs(Ai=Ai_bp2)
         # if COMP_BYPASS_OPEN:
@@ -1864,9 +1864,9 @@ class SR71_Engine(Engine):
         error = 0
         dP = 1
         tol = 1e-2
-        alpha = 1.0
+        alpha = 0.4
         while abs(dP) > tol:
-            alpha += error if error + alpha > 0 else error/5 
+            alpha += error if error + alpha > 0 else error/3 
             # check if alpha went < 0
             if alpha < 0 or not COMP_BYPASS_OPEN:
                 # print('Alpha set to 0')
